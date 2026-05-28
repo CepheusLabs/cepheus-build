@@ -47,6 +47,9 @@ from each `products/*.toml` file. Local run history is stored in
 also reads `[stores.*]` lanes from product configs for deploy preview and
 store submission runs. Local Build runs automatically install configured
 missing tools before starting the build; Dry Run keeps to preview output only.
+The local build environment includes common user tool directories such as
+`~/.cargo/bin`, so tools installed during dependency setup are available to
+later targets in the same run.
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
 
@@ -66,7 +69,9 @@ normal store-submission mode.
 Cepheus Build supports the same product configs in three places:
 
 - Local builds: run `shared/cepheus-build/bin/cepheus-build build ...` from a
-  developer machine or release workstation.
+  developer machine or release workstation. Desktop Flutter builds are
+  host-native: Linux desktop targets need Linux, Windows targets need Windows,
+  and Apple targets need macOS.
 - GitHub-hosted runners: use the reusable workflow with the
   `github-hosted` runner profile from `build.toml`.
 - Self-hosted GitHub runners: use the reusable workflow with the `self-hosted`

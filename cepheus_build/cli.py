@@ -55,6 +55,26 @@ def current_host() -> str:
     return HOST_ALIASES.get(platform.system().lower(), platform.system().lower())
 
 
+def augment_process_path() -> None:
+    candidates = [
+        Path.home() / ".cargo" / "bin",
+        Path.home() / ".pub-cache" / "bin",
+        Path.home() / ".local" / "bin",
+        Path("/opt/homebrew/bin"),
+        Path("/opt/homebrew/sbin"),
+        Path("/usr/local/bin"),
+    ]
+    existing = [part for part in os.environ.get("PATH", "").split(os.pathsep) if part]
+    normalized = {str(Path(part).expanduser()) for part in existing}
+    additions = [
+        str(path)
+        for path in candidates
+        if path.exists() and str(path) not in normalized
+    ]
+    if additions:
+        os.environ["PATH"] = os.pathsep.join([*additions, *existing])
+
+
 def shell_quote(value: str) -> str:
     if os.name == "nt":
         return value
@@ -372,6 +392,7 @@ def install_deps_for_targets(
         print(f"install: {tool}")
         for command in commands:
             run_command(command, TOOL_ROOT, dict(os.environ), dry_run)
+            augment_process_path()
 
     if missing_manual:
         raise BuildError(
@@ -838,37 +859,58 @@ def cmd_install_deps(args: argparse.Namespace) -> int:
     )
 
 
+def command_failure_message(exc: Exception) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        return f"command failed with exit code {exc.returncode}"
+    return str(exc)
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     config = load_product(args)
     if args.execution_mode == "github":
         return cmd_github_build(config, args)
 
     targets = config.expand_targets(args.targets)
-    if args.install_missing_deps:
-        install_deps_for_targets(
-            config,
-            targets,
-            dry_run=args.dry_run,
-            skip_existing=True,
-            skip_unsupported=args.skip_unsupported,
-            quiet_existing=True,
-            quiet_empty=True,
-        )
-
     stamp = compute_stamp(config)
     extra_env = buildroot_env(args)
+    failures: list[tuple[str, str]] = []
     for target in targets:
-        run_target(
-            config=config,
-            target_name=target,
-            stamp=stamp,
-            dry_run=args.dry_run,
-            build_mode=args.mode,
-            extra_args=args.flutter_arg or [],
-            skip_unsupported=args.skip_unsupported,
-            extra_env=extra_env,
-            check_tools=args.check_tools,
-        )
+        try:
+            target_config = config.target(target)
+            if not ensure_host(target, target_config, skip_unsupported=args.skip_unsupported):
+                continue
+            if args.install_missing_deps:
+                install_deps_for_targets(
+                    config,
+                    [target],
+                    dry_run=args.dry_run,
+                    skip_existing=True,
+                    skip_unsupported=False,
+                    quiet_existing=True,
+                    quiet_empty=True,
+                )
+            run_target(
+                config=config,
+                target_name=target,
+                stamp=stamp,
+                dry_run=args.dry_run,
+                build_mode=args.mode,
+                extra_args=args.flutter_arg or [],
+                skip_unsupported=False,
+                extra_env=extra_env,
+                check_tools=args.check_tools,
+            )
+        except (BuildError, subprocess.CalledProcessError) as exc:
+            message = command_failure_message(exc)
+            failures.append((target, message))
+            print(f"failed: {target}: {message}", file=sys.stderr)
+            if not args.keep_going:
+                raise
+    if failures:
+        print("\n## Build summary")
+        for target, message in failures:
+            print(f"failed: {target}: {message}")
+        return 1
     return 0
 
 
@@ -958,17 +1000,20 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
         print(f"\n## {config.display_name} ({product_name})")
         try:
             targets = config.expand_targets(args.targets or ["desktop"])
-            if args.install_missing_deps:
-                install_deps_for_targets(
-                    config,
-                    targets,
-                    dry_run=args.dry_run,
-                    skip_existing=True,
-                    skip_unsupported=args.skip_unsupported,
-                    quiet_existing=True,
-                    quiet_empty=True,
-                )
             for target in targets:
+                target_config = config.target(target)
+                if not ensure_host(target, target_config, skip_unsupported=args.skip_unsupported):
+                    continue
+                if args.install_missing_deps:
+                    install_deps_for_targets(
+                        config,
+                        [target],
+                        dry_run=args.dry_run,
+                        skip_existing=True,
+                        skip_unsupported=False,
+                        quiet_existing=True,
+                        quiet_empty=True,
+                    )
                 run_target(
                     config=config,
                     target_name=target,
@@ -976,13 +1021,14 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
                     dry_run=args.dry_run,
                     build_mode=args.mode,
                     extra_args=args.flutter_arg or [],
-                    skip_unsupported=args.skip_unsupported,
+                    skip_unsupported=False,
                     extra_env=extra_env,
                     check_tools=args.check_tools,
                 )
-        except Exception as exc:
-            failures.append((product_name, str(exc)))
-            print(f"failed: {product_name}: {exc}", file=sys.stderr)
+        except (BuildError, subprocess.CalledProcessError) as exc:
+            message = command_failure_message(exc)
+            failures.append((product_name, message))
+            print(f"failed: {product_name}: {message}", file=sys.stderr)
             if not args.keep_going:
                 break
 
@@ -1032,6 +1078,12 @@ def add_local_build_args(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Install configured missing local tools before building. Defaults to false.",
+    )
+    parser.add_argument(
+        "--keep-going",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Continue with later targets after one target fails. Defaults to true.",
     )
 
 
@@ -1146,18 +1198,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     local_sweep.add_argument("--exclude", action="append", help="Product to skip. Repeat as needed.")
     add_local_build_args(local_sweep)
-    local_sweep.add_argument(
-        "--keep-going",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Continue after a product fails. Defaults to true.",
-    )
     local_sweep.set_defaults(func=cmd_local_sweep)
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    augment_process_path()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

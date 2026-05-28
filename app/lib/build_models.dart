@@ -47,6 +47,7 @@ class BuildSettings {
     required this.buildrootDir,
     required this.setupBuildrootDeps,
     required this.skipUnsupported,
+    required this.keepGoing,
     required this.store,
   });
 
@@ -64,6 +65,7 @@ class BuildSettings {
       buildrootDir: '',
       setupBuildrootDeps: true,
       skipUnsupported: true,
+      keepGoing: true,
       store: '',
     );
   }
@@ -91,6 +93,7 @@ class BuildSettings {
       skipUnsupported: json['skipUnsupported'] is bool
           ? json['skipUnsupported'] as bool
           : true,
+      keepGoing: json['keepGoing'] is bool ? json['keepGoing'] as bool : true,
       store: _string(json['store'], ''),
     );
   }
@@ -107,6 +110,7 @@ class BuildSettings {
   final String buildrootDir;
   final bool setupBuildrootDeps;
   final bool skipUnsupported;
+  final bool keepGoing;
   final String store;
 
   BuildSettings copyWith({
@@ -122,6 +126,7 @@ class BuildSettings {
     String? buildrootDir,
     bool? setupBuildrootDeps,
     bool? skipUnsupported,
+    bool? keepGoing,
     String? store,
   }) {
     return BuildSettings(
@@ -137,6 +142,7 @@ class BuildSettings {
       buildrootDir: buildrootDir ?? this.buildrootDir,
       setupBuildrootDeps: setupBuildrootDeps ?? this.setupBuildrootDeps,
       skipUnsupported: skipUnsupported ?? this.skipUnsupported,
+      keepGoing: keepGoing ?? this.keepGoing,
       store: store ?? this.store,
     );
   }
@@ -154,6 +160,7 @@ class BuildSettings {
       'buildrootDir': buildrootDir,
       'setupBuildrootDeps': setupBuildrootDeps,
       'skipUnsupported': skipUnsupported,
+      'keepGoing': keepGoing,
       'store': store,
     };
   }

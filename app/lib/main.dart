@@ -57,6 +57,37 @@ class _RunnerProfileChoice {
   final String label;
 }
 
+enum _LogFilter {
+  all('All'),
+  issues('Warnings + errors'),
+  warnings('Warnings'),
+  errors('Errors'),
+  skips('Skips'),
+  commands('Commands'),
+  targets('Targets'),
+  exits('Exits'),
+  output('Output');
+
+  const _LogFilter(this.label);
+
+  final String label;
+
+  bool accepts(ClLogEntry entry) {
+    return switch (this) {
+      _LogFilter.all => true,
+      _LogFilter.issues =>
+        entry.tone == ClLogTone.warning || entry.tone == ClLogTone.danger,
+      _LogFilter.warnings => entry.tone == ClLogTone.warning,
+      _LogFilter.errors => entry.tone == ClLogTone.danger,
+      _LogFilter.skips => entry.tag == 'skip',
+      _LogFilter.commands => entry.tag == 'cmd',
+      _LogFilter.targets => entry.tag == 'target',
+      _LogFilter.exits => entry.tag == 'exit',
+      _LogFilter.output => entry.tag == 'log',
+    };
+  }
+}
+
 void main() {
   runApp(const CepheusBuildConsoleApp());
 }
@@ -124,6 +155,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   String? _message;
   bool _loading = true;
   bool _showLiveOutput = true;
+  _LogFilter _logFilter = _LogFilter.all;
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
@@ -800,6 +832,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     args.addAll(['--mode', _settings.buildMode]);
     if (!dryRun) args.add('--install-missing-deps');
     if (_settings.skipUnsupported) args.add('--skip-unsupported');
+    args.add(_settings.keepGoing ? '--keep-going' : '--no-keep-going');
     if (_settings.product == 'foundry') {
       final buildrootDir = _settings.buildrootDir.trim();
       if (buildrootDir.isNotEmpty) {
@@ -1039,6 +1072,27 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                       ? null
                       : (value) => _updateSettings(
                           _settings.copyWith(skipUnsupported: value),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: brand.borderSubtle),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  title: Text(
+                    'Keep going after target failure',
+                    style: context.clBodySmall,
+                  ),
+                  value: _settings.keepGoing,
+                  onChanged: _isRunning
+                      ? null
+                      : (value) => _updateSettings(
+                          _settings.copyWith(keepGoing: value),
                         ),
                 ),
               ),
@@ -1290,6 +1344,10 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         : _selectedHistory == null
         ? 'no selected run'
         : '${_selectedHistory!.product} ${_entryScope(_selectedHistory!)}';
+    final allEntries = _logEntries(_visibleOutput);
+    final visibleEntries = allEntries
+        .where((entry) => _logFilter.accepts(entry))
+        .toList();
 
     return ClPanel(
       fillParent: true,
@@ -1320,12 +1378,22 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               command: _commandFor(_runningAction ?? BuildAction.plan).display,
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: _LogFilterBar(
+              value: _logFilter,
+              visibleCount: visibleEntries.length,
+              totalCount: allEntries.length,
+              onChanged: (value) => setState(() => _logFilter = value),
+            ),
+          ),
           Expanded(
             child: ClLogView(
               controller: _logScrollController,
-              entries: _logEntries(_visibleOutput),
-              emptyMessage:
-                  'No output yet. Run plan, matrix, dry-run, or build.',
+              entries: visibleEntries,
+              emptyMessage: allEntries.isEmpty
+                  ? 'No output yet. Run plan, matrix, dry-run, or build.'
+                  : 'No lines match ${_logFilter.label}.',
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
               timeColumnWidth: 42,
               tagColumnWidth: 72,
@@ -1405,6 +1473,67 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: ClTechLabel(label),
+    );
+  }
+}
+
+class _LogFilterBar extends StatelessWidget {
+  const _LogFilterBar({
+    required this.value,
+    required this.visibleCount,
+    required this.totalCount,
+    required this.onChanged,
+  });
+
+  final _LogFilter value;
+  final int visibleCount;
+  final int totalCount;
+  final ValueChanged<_LogFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brandColors;
+    return Row(
+      children: [
+        SizedBox(
+          width: 220,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: brand.bgAlt,
+              border: Border.all(color: brand.borderSubtle),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<_LogFilter>(
+                  value: value,
+                  isExpanded: true,
+                  icon: const ClIcon(ClIcons.chevronDown, size: 15),
+                  style: context.clBodySmall.copyWith(color: brand.ink2),
+                  dropdownColor: brand.surface2,
+                  items: [
+                    for (final filter in _LogFilter.values)
+                      DropdownMenuItem(
+                        value: filter,
+                        child: Text(filter.label),
+                      ),
+                  ],
+                  onChanged: (filter) {
+                    if (filter == null) return;
+                    onChanged(filter);
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          '$visibleCount / $totalCount lines',
+          style: context.dataTiny.copyWith(color: brand.ink3),
+        ),
+      ],
     );
   }
 }
