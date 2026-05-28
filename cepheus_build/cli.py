@@ -528,9 +528,10 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         raise BuildError(f"{config.slug} store '{args.store}' is disabled.")
     ensure_host(args.store, store, skip_unsupported=False)
     env = build_env(config, stamp)
-    for required in store.get("required_env", []) or []:
-        if not env.get(str(required)):
-            raise BuildError(f"Missing required environment variable for {args.store}: {required}")
+    if not args.dry_run:
+        for required in store.get("required_env", []) or []:
+            if not env.get(str(required)):
+                raise BuildError(f"Missing required environment variable for {args.store}: {required}")
     cwd = resolve_path(store.get("cwd", "."), config.repo_root)
     for command in store.get("commands", []) or []:
         run_command(str(command), cwd, env, args.dry_run)
