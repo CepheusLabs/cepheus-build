@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import glob
+import json
 import os
 import platform
 import shlex
@@ -34,6 +35,35 @@ HOST_ALIASES = {
     "windows": "windows",
     "win32": "windows",
     "linux": "linux",
+}
+
+HOST_ORDER = ["linux", "macos", "windows"]
+
+GITHUB_HOSTED_RUNNERS: dict[str, str | list[str]] = {
+    "linux": "ubuntu-latest",
+    "macos": "macos-latest",
+    "windows": "windows-latest",
+}
+
+SELF_HOSTED_RUNNERS: dict[str, str | list[str]] = {
+    "linux": ["self-hosted", "linux"],
+    "macos": ["self-hosted", "macos"],
+    "windows": ["self-hosted", "windows"],
+}
+
+TARGET_HOST_PREFERENCES: dict[str, list[str]] = {
+    "android": ["linux", "macos", "windows"],
+    "ios": ["macos"],
+    "linux": ["linux"],
+    "linux-appimage": ["linux"],
+    "linux-deb": ["linux"],
+    "macos": ["macos"],
+    "macos-appstore": ["macos"],
+    "macos-dmg": ["macos"],
+    "web": ["linux", "macos", "windows"],
+    "windows": ["windows"],
+    "windows-installer": ["windows"],
+    "windows-msix": ["windows"],
 }
 
 
@@ -389,6 +419,93 @@ def collect_artifacts(config: ProductConfig, target_names: list[str]) -> dict[st
     return found
 
 
+def normalize_hosts(value: Any) -> list[str]:
+    hosts = value or ["linux", "macos", "windows"]
+    if isinstance(hosts, str):
+        hosts = [hosts]
+    normalized: list[str] = []
+    for host in hosts:
+        host_name = HOST_ALIASES.get(str(host).lower(), str(host).lower())
+        if host_name == "any":
+            for item in HOST_ORDER:
+                if item not in normalized:
+                    normalized.append(item)
+        elif host_name in HOST_ORDER and host_name not in normalized:
+            normalized.append(host_name)
+    return normalized or list(HOST_ORDER)
+
+
+def runner_map(profile: str) -> dict[str, str | list[str]]:
+    if profile == "github-hosted":
+        return GITHUB_HOSTED_RUNNERS
+    if profile == "self-hosted":
+        return SELF_HOSTED_RUNNERS
+    raise BuildError("runner profile must be github-hosted or self-hosted")
+
+
+def preferred_host_for_target(target_name: str, target: dict[str, Any]) -> str | None:
+    allowed = normalize_hosts(target.get("hosts") or target.get("host"))
+    preferences = TARGET_HOST_PREFERENCES.get(target_name)
+    if not preferences:
+        if target_name.startswith("windows"):
+            preferences = ["windows"]
+        elif target_name.startswith("macos") or target_name.startswith("ios"):
+            preferences = ["macos"]
+        elif target_name.startswith("linux"):
+            preferences = ["linux"]
+        else:
+            preferences = HOST_ORDER
+    for host in preferences:
+        if host in allowed:
+            return host
+    for host in HOST_ORDER:
+        if host in allowed:
+            return host
+    return None
+
+
+def build_ci_matrix(
+    config: ProductConfig,
+    target_names: list[str],
+    profile: str,
+) -> dict[str, list[dict[str, Any]]]:
+    runners = runner_map(profile)
+    rows_by_host: dict[str, list[str]] = {host: [] for host in HOST_ORDER}
+    targets_by_name = {target_name: config.target(target_name) for target_name in target_names}
+    for target_name in target_names:
+        target = targets_by_name[target_name]
+        host = preferred_host_for_target(target_name, target)
+        if host and host in runners:
+            rows_by_host[host].append(target_name)
+
+    rows: list[dict[str, Any]] = []
+    for host in HOST_ORDER:
+        targets = rows_by_host[host]
+        if not targets:
+            continue
+        tools = {
+            str(tool)
+            for target_name in targets
+            for tool in (targets_by_name[target_name].get("tools", []) or [])
+        }
+        rows.append(
+            {
+                "name": host,
+                "host": host,
+                "runner": runners[host],
+                "targets": " ".join(targets),
+                "setup_flutter": "flutter" in tools,
+                "setup_go": "go" in tools,
+                "setup_rust": bool({"cargo", "rustup", "cargo-ndk", "wasm-pack"} & tools),
+                "setup_cargo_ndk": "cargo-ndk" in tools,
+                "setup_wasm_pack": "wasm-pack" in tools,
+            }
+        )
+    if not rows:
+        raise BuildError("No CI matrix rows could be generated for the requested targets.")
+    return {"include": rows}
+
+
 def product_summary(config: ProductConfig) -> str:
     targets = ", ".join(sorted(name for name, target in config.targets.items() if bool((target or {}).get("enabled", True))))
     stores = ", ".join(sorted(config.stores)) or "none"
@@ -538,6 +655,18 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ci_matrix(args: argparse.Namespace) -> int:
+    config = load_product(args)
+    requested = args.targets or ["all"]
+    targets = config.expand_targets(requested)
+    matrix = build_ci_matrix(config, targets, args.runner_profile)
+    if args.pretty:
+        print(json.dumps(matrix, indent=2))
+    else:
+        print(json.dumps(matrix, separators=(",", ":")))
+    return 0
+
+
 def add_product_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-p", "--product", help="Product name from products/<name>.toml.")
     parser.add_argument("-c", "--config", help="Path to a product config TOML file.")
@@ -591,6 +720,18 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument("store", help="Store name from [stores.<name>].")
     deploy.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
     deploy.set_defaults(func=cmd_deploy)
+
+    ci_matrix = sub.add_parser("ci-matrix", help="Generate a GitHub Actions matrix for product targets.")
+    add_product_args(ci_matrix)
+    ci_matrix.add_argument("targets", nargs="*", help="Targets or groups. Defaults to all.")
+    ci_matrix.add_argument(
+        "--runner-profile",
+        choices=["github-hosted", "self-hosted"],
+        default="github-hosted",
+        help="Use GitHub-provided runners or organization self-hosted runners.",
+    )
+    ci_matrix.add_argument("--pretty", action="store_true", help="Print indented JSON.")
+    ci_matrix.set_defaults(func=cmd_ci_matrix)
 
     return parser
 

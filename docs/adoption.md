@@ -9,7 +9,27 @@ git submodule add https://github.com/CepheusLabs/cepheus-build.git shared/cepheu
 git commit -m "build: add shared Cepheus build toolkit"
 ```
 
-Then add a thin workflow in the app repo:
+## Local Builds
+
+Local builds use the same product configs as CI. They run on the current
+machine and skip targets for other operating systems when asked:
+
+```bash
+shared/cepheus-build/bin/cepheus-build plan -p printdeck --repo-root "$PWD" all
+shared/cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
+```
+
+Build one target when you are on the right host:
+
+```bash
+shared/cepheus-build/bin/cepheus-build build -p colorwake-studio --repo-root "$PWD" macos
+shared/cepheus-build/bin/cepheus-build build -p anvil --repo-root "$PWD" android
+shared/cepheus-build/bin/cepheus-build build -p deckhand --repo-root "$PWD" windows-installer
+```
+
+## GitHub-Hosted Runners
+
+Add a thin workflow in the app repo:
 
 ```yaml
 name: app-build
@@ -24,9 +44,27 @@ jobs:
     with:
       product: printdeck
       toolkit-ref: main
+      runner-profile: github-hosted
+      targets: all
 ```
 
-For self-hosted runners, pass a matrix with runner labels:
+The shared workflow generates this kind of matrix automatically:
+
+```json
+{
+  "include": [
+    {"name": "linux", "runner": "ubuntu-latest", "targets": "web android linux"},
+    {"name": "macos", "runner": "macos-latest", "targets": "ios macos"},
+    {"name": "windows", "runner": "windows-latest", "targets": "windows"}
+  ]
+}
+```
+
+## Self-Hosted GitHub Runners
+
+Use `runner-profile: self-hosted`. The planning job also needs a runner, so
+point it at a Linux self-hosted runner if the org should avoid
+GitHub-provided minutes entirely:
 
 ```yaml
 jobs:
@@ -34,12 +72,62 @@ jobs:
     uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
     with:
       product: deckhand
+      runner-profile: self-hosted
+      planner-runner-json: '["self-hosted","linux"]'
+      targets: desktop_packages
+```
+
+If the self-hosted images already contain Flutter, Rust, and Go, disable the
+setup actions:
+
+```yaml
+jobs:
+  build:
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    with:
+      product: deckhand
+      runner-profile: self-hosted
+      planner-runner-json: '["self-hosted","linux"]'
+      targets: desktop_packages
+      setup-flutter: false
+      setup-rust: false
+      setup-go: false
+```
+
+The generated rows use these labels by default:
+
+```json
+{
+  "include": [
+    {"name": "linux", "runner": ["self-hosted", "linux"], "targets": "linux-appimage"},
+    {"name": "macos", "runner": ["self-hosted", "macos"], "targets": "macos-dmg"},
+    {"name": "windows", "runner": ["self-hosted", "windows"], "targets": "windows-installer"}
+  ]
+}
+```
+
+Rows also carry setup hints such as `setup_flutter`, `setup_rust`, and
+`setup_go`. The workflow uses those hints to install only the toolchains needed
+by that row.
+
+## Custom Matrices
+
+When a product needs a special runner label, GPU builder, notarization host, or
+temporary split, pass `matrix-json`. It overrides `runner-profile`:
+
+```yaml
+jobs:
+  build:
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    with:
+      product: anvil
       matrix-json: >-
-        [
-          {"name":"linux","runner":["self-hosted","linux"],"targets":"linux linux-appimage"},
-          {"name":"macos","runner":["self-hosted","macos"],"targets":"macos macos-dmg"},
-          {"name":"windows","runner":["self-hosted","windows"],"targets":"windows windows-installer"}
-        ]
+        {
+          "include": [
+            {"name":"linux-gpu","runner":["self-hosted","linux","gpu"],"targets":"linux"},
+            {"name":"macos-sign","runner":["self-hosted","macos","codesign"],"targets":"ios macos"}
+          ]
+        }
 ```
 
 ## Local Product Config
@@ -67,4 +155,3 @@ shared/cepheus-build/bin/cepheus-build build --config .cepheus-build.toml linux
 
 Prefer central configs in this repo for shared product behavior. Prefer local
 configs only for experiments, forks, or app-private release lanes.
-

@@ -10,3 +10,5 @@ jobs:
     with:
       product: printdeck
       toolkit-ref: main
+      runner-profile: github-hosted
+      targets: all

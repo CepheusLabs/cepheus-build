@@ -17,20 +17,58 @@ on:
         required: false
         default: release
         type: string
-      matrix-json:
-        description: Build matrix JSON.
+      targets:
+        description: Space-separated targets or groups to build.
         required: false
-        default: '[{"name":"linux","runner":"ubuntu-latest","targets":"web android linux"},{"name":"macos","runner":"macos-latest","targets":"ios macos"},{"name":"windows","runner":"windows-latest","targets":"windows"}]'
+        default: all
+        type: string
+      runner-profile:
+        description: github-hosted or self-hosted. Ignored when matrix-json is set.
+        required: false
+        default: github-hosted
+        type: string
+      planner-runner-json:
+        description: JSON runs-on value for the planning job. Use '["self-hosted","linux"]' for self-hosted-only orgs.
+        required: false
+        default: '"ubuntu-latest"'
+        type: string
+      setup-flutter:
+        description: Install Flutter with subosito/flutter-action before building.
+        required: false
+        default: true
+        type: boolean
+      setup-rust:
+        description: Install Rust when a matrix row uses cargo/rustup.
+        required: false
+        default: true
+        type: boolean
+      rust-toolchain:
+        description: Rust toolchain for dtolnay/rust-toolchain.
+        required: false
+        default: stable
+        type: string
+      setup-go:
+        description: Install Go when a matrix row uses go.
+        required: false
+        default: true
+        type: boolean
+      go-version:
+        description: Go version for actions/setup-go.
+        required: false
+        default: '1.22'
+        type: string
+      matrix-json:
+        description: 'Optional full matrix JSON override. Shape: {"include":[{"name":"linux","runner":"ubuntu-latest","targets":"web linux"}]}.'
+        required: false
+        default: ''
         type: string
 
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.matrix-json) }}
+  plan:
+    name: Plan
+    runs-on: ${{ fromJSON(inputs['planner-runner-json']) }}
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout product
         uses: actions/checkout@v4
@@ -42,14 +80,95 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: CepheusLabs/cepheus-build
-          ref: ${{ inputs.toolkit-ref }}
+          ref: ${{ inputs['toolkit-ref'] }}
+          path: .cepheus-build
+
+      - name: Resolve matrix
+        id: matrix
+        shell: bash
+        env:
+          MATRIX_JSON: ${{ inputs['matrix-json'] }}
+          PRODUCT: ${{ inputs.product }}
+          RUNNER_PROFILE: ${{ inputs['runner-profile'] }}
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python)"
+          if [ -n "$MATRIX_JSON" ]; then
+            matrix="$("$PYTHON_BIN" - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["MATRIX_JSON"])
+          if isinstance(payload, list):
+              payload = {"include": payload}
+          print(json.dumps(payload, separators=(",", ":")))
+          PY
+          )"
+          else
+            matrix="$("$PYTHON_BIN" .cepheus-build/bin/cepheus-build ci-matrix \
+              --product "$PRODUCT" \
+              --repo-root "$GITHUB_WORKSPACE" \
+              --runner-profile "$RUNNER_PROFILE" \
+              $TARGETS)"
+          fi
+          {
+            echo "matrix<<EOF"
+            echo "$matrix"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "$matrix"
+
+  build:
+    name: ${{ matrix.name }}
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout product
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Checkout build toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: CepheusLabs/cepheus-build
+          ref: ${{ inputs['toolkit-ref'] }}
           path: .cepheus-build
 
       - name: Set up Flutter
+        if: ${{ inputs['setup-flutter'] && matrix.setup_flutter }}
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Set up Rust
+        if: ${{ inputs['setup-rust'] && matrix.setup_rust }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ inputs['rust-toolchain'] }}
+
+      - name: Install cargo-ndk
+        if: ${{ inputs['setup-rust'] && matrix.setup_cargo_ndk }}
+        shell: bash
+        run: cargo install cargo-ndk --locked
+
+      - name: Install wasm-pack
+        if: ${{ inputs['setup-rust'] && matrix.setup_wasm_pack }}
+        shell: bash
+        run: cargo install wasm-pack --locked
+
+      - name: Set up Go
+        if: ${{ inputs['setup-go'] && matrix.setup_go }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ inputs['go-version'] }}
+          cache: false
 
       - name: Build
         shell: bash

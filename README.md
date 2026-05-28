@@ -36,6 +36,29 @@ shared/cepheus-build/bin/cepheus-build build \
   desktop
 ```
 
+## Build Modes
+
+Cepheus Build supports the same product configs in three places:
+
+- Local builds: run `shared/cepheus-build/bin/cepheus-build build ...` from a
+  developer machine or release workstation.
+- GitHub-hosted runners: use the reusable workflow with
+  `runner-profile: github-hosted`.
+- Self-hosted GitHub runners: use the reusable workflow with
+  `runner-profile: self-hosted` and a self-hosted planner runner.
+
+You can inspect the generated CI matrix without running a build:
+
+```bash
+./bin/cepheus-build ci-matrix -p printdeck --runner-profile github-hosted all --pretty
+./bin/cepheus-build ci-matrix -p deckhand --runner-profile self-hosted desktop_packages --pretty
+```
+
+Generated matrix rows include setup hints for Flutter, Rust, Go, `cargo-ndk`,
+and `wasm-pack`. The reusable workflow installs those on GitHub-hosted runners
+by default; self-hosted workflows can disable setup when runner images already
+include the toolchains.
+
 `ipadOS` ships through the `ios` lane. Flutter/Xcode produces the universal
 iOS app; product entitlements and App Store settings decide iPhone/iPad
 availability.
@@ -76,4 +99,3 @@ assets, or release policy is not ready yet.
 
 See [docs/adoption.md](docs/adoption.md) for submodule setup and workflow
 templates.
-
