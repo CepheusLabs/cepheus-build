@@ -25,6 +25,9 @@ hint = "install Rust with rustup or your package manager"
 hint = "install with: cargo install cargo-ndk --locked"
 install = ["cargo install cargo-ndk --locked"]
 
+[tools."clang++"]
+hint = "install LLVM/Clang and make sure clang++ is on PATH"
+
 [tools.create-dmg]
 hint = "install with: brew install create-dmg"
 install = { macos = ["brew install create-dmg"] }
@@ -44,6 +47,7 @@ hint = "install Inno Setup and make sure iscc is on PATH"
 
 [tools.pwsh]
 hint = "install PowerShell and make sure pwsh is on PATH"
+install = { macos = ["brew install --cask powershell"] }
 
 [tools.rustup]
 hint = "install Rust with rustup"

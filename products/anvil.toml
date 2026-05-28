@@ -16,13 +16,13 @@ mobile = ["ios", "android"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
 [targets.web]
-hosts = ["windows"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
 commands = [
   "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-web.ps1",
 ]
 artifacts = ["app/build/web"]
-tools = ["pwsh", "flutter", "flutter_rust_bridge_codegen", "wasm-pack"]
+tools = ["pwsh", "flutter", "flutter_rust_bridge_codegen", "wasm-pack", "rustup", "clang++"]
 
 [targets.android]
 hosts = ["linux", "macos"]
