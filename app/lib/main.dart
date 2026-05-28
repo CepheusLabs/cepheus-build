@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:forge/forge.dart';
 
 import 'build_models.dart';
 
 const _maxHistoryEntries = 250;
-const _maxStoredOutputChars = 160000;
 
 class _ProductDescriptor {
   const _ProductDescriptor({
@@ -156,6 +156,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   bool _loading = true;
   bool _showLiveOutput = true;
   _LogFilter _logFilter = _LogFilter.all;
+  bool _showRawLog = false;
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
@@ -719,11 +720,78 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   void _cancelRun() {
     final process = _process;
     if (process == null) return;
-    process.kill(ProcessSignal.sigterm);
     setState(() {
       _message = 'Cancel requested';
       _liveOutput = '$_liveOutput\ncancel requested\n';
     });
+    unawaited(_terminateProcessTree(process.pid));
+  }
+
+  Future<void> _terminateProcessTree(int pid) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('taskkill', ['/PID', '$pid', '/T', '/F']);
+        return;
+      }
+
+      var descendants = await _collectDescendantPids(pid);
+      await _signalPids([...descendants, pid], 'TERM');
+      await Future<void>.delayed(const Duration(seconds: 2));
+
+      if (!await _isPidAlive(pid)) return;
+      descendants = await _collectDescendantPids(pid);
+      await _signalPids([...descendants, pid], 'KILL');
+      if (!mounted) return;
+      setState(() {
+        _message = 'Cancel forced';
+        _liveOutput = '$_liveOutput\ncancel forced\n';
+      });
+    } on Object catch (error) {
+      if (!Platform.isWindows) {
+        await Process.run('kill', ['-KILL', '$pid']);
+      }
+      if (!mounted) return;
+      setState(() {
+        _message = 'Cancel signal failed';
+        _liveOutput = '$_liveOutput\ncancel signal failed: $error\n';
+      });
+    }
+  }
+
+  Future<List<int>> _collectDescendantPids(int pid) async {
+    final result = await Process.run('pgrep', ['-P', '$pid']);
+    if (result.exitCode != 0) return const [];
+    final direct = result.stdout
+        .toString()
+        .split(RegExp(r'\s+'))
+        .map(int.tryParse)
+        .whereType<int>()
+        .toList();
+    final descendants = <int>[];
+    for (final child in direct) {
+      descendants.addAll(await _collectDescendantPids(child));
+      descendants.add(child);
+    }
+    return descendants;
+  }
+
+  Future<void> _signalPids(List<int> pids, String signal) async {
+    final seen = <int>{};
+    for (final pid in pids) {
+      if (!seen.add(pid)) continue;
+      await Process.run('kill', ['-$signal', '$pid']);
+    }
+  }
+
+  Future<bool> _isPidAlive(int pid) async {
+    final result = await Process.run('kill', ['-0', '$pid']);
+    return result.exitCode == 0;
+  }
+
+  Future<void> _copyLogText(String text, String label) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    setState(() => _message = '$label copied');
   }
 
   Future<void> _clearHistory() async {
@@ -1348,6 +1416,11 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     final visibleEntries = allEntries
         .where((entry) => _logFilter.accepts(entry))
         .toList();
+    final visibleText = _logTextForEntries(visibleEntries);
+    final fullText = _visibleOutput;
+    final rawDisplayText = _logFilter == _LogFilter.all
+        ? fullText
+        : visibleText;
 
     return ClPanel(
       fillParent: true,
@@ -1385,19 +1458,35 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               visibleCount: visibleEntries.length,
               totalCount: allEntries.length,
               onChanged: (value) => setState(() => _logFilter = value),
+              rawMode: _showRawLog,
+              onRawModeChanged: (value) => setState(() => _showRawLog = value),
+              onCopyVisible: visibleText.isEmpty
+                  ? null
+                  : () => unawaited(_copyLogText(visibleText, 'Visible log')),
+              onCopyAll: fullText.isEmpty
+                  ? null
+                  : () => unawaited(_copyLogText(fullText, 'Full log')),
             ),
           ),
           Expanded(
-            child: ClLogView(
-              controller: _logScrollController,
-              entries: visibleEntries,
-              emptyMessage: allEntries.isEmpty
-                  ? 'No output yet. Run plan, matrix, dry-run, or build.'
-                  : 'No lines match ${_logFilter.label}.',
-              padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
-              timeColumnWidth: 42,
-              tagColumnWidth: 72,
-            ),
+            child: _showRawLog
+                ? _SelectableRawLogView(
+                    text: rawDisplayText,
+                    emptyMessage: allEntries.isEmpty
+                        ? 'No output yet. Run plan, matrix, dry-run, or build.'
+                        : 'No lines match ${_logFilter.label}.',
+                    controller: _logScrollController,
+                  )
+                : ClLogView(
+                    controller: _logScrollController,
+                    entries: visibleEntries,
+                    emptyMessage: allEntries.isEmpty
+                        ? 'No output yet. Run plan, matrix, dry-run, or build.'
+                        : 'No lines match ${_logFilter.label}.',
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
+                    timeColumnWidth: 42,
+                    tagColumnWidth: 72,
+                  ),
           ),
         ],
       ),
@@ -1483,57 +1572,141 @@ class _LogFilterBar extends StatelessWidget {
     required this.visibleCount,
     required this.totalCount,
     required this.onChanged,
+    required this.rawMode,
+    required this.onRawModeChanged,
+    required this.onCopyVisible,
+    required this.onCopyAll,
   });
 
   final _LogFilter value;
   final int visibleCount;
   final int totalCount;
   final ValueChanged<_LogFilter> onChanged;
+  final bool rawMode;
+  final ValueChanged<bool> onRawModeChanged;
+  final VoidCallback? onCopyVisible;
+  final VoidCallback? onCopyAll;
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brandColors;
-    return Row(
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SizedBox(
-          width: 220,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: brand.bgAlt,
-              border: Border.all(color: brand.borderSubtle),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<_LogFilter>(
-                  value: value,
-                  isExpanded: true,
-                  icon: const ClIcon(ClIcons.chevronDown, size: 15),
-                  style: context.clBodySmall.copyWith(color: brand.ink2),
-                  dropdownColor: brand.surface2,
-                  items: [
-                    for (final filter in _LogFilter.values)
-                      DropdownMenuItem(
-                        value: filter,
-                        child: Text(filter.label),
-                      ),
-                  ],
-                  onChanged: (filter) {
-                    if (filter == null) return;
-                    onChanged(filter);
-                  },
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220, minWidth: 180),
+          child: SizedBox(
+            width: 220,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: brand.bgAlt,
+                border: Border.all(color: brand.borderSubtle),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<_LogFilter>(
+                    value: value,
+                    isExpanded: true,
+                    icon: const ClIcon(ClIcons.chevronDown, size: 15),
+                    style: context.clBodySmall.copyWith(color: brand.ink2),
+                    dropdownColor: brand.surface2,
+                    items: [
+                      for (final filter in _LogFilter.values)
+                        DropdownMenuItem(
+                          value: filter,
+                          child: Text(filter.label),
+                        ),
+                    ],
+                    onChanged: (filter) {
+                      if (filter == null) return;
+                      onChanged(filter);
+                    },
+                  ),
                 ),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 10),
-        Text(
-          '$visibleCount / $totalCount lines',
-          style: context.dataTiny.copyWith(color: brand.ink3),
+        SizedBox(
+          height: 30,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$visibleCount / $totalCount lines',
+              style: context.dataTiny.copyWith(color: brand.ink3),
+            ),
+          ),
+        ),
+        Tooltip(
+          message: 'Use selectable raw text',
+          child: ClFilterPill(
+            active: rawMode,
+            onTap: () => onRawModeChanged(!rawMode),
+            label: 'Text',
+          ),
+        ),
+        Tooltip(
+          message: 'Copy filtered output',
+          child: ClButton.iconOnly(
+            icon: ClIcons.copy,
+            size: ClButtonSize.sm,
+            kind: ClButtonKind.outlined,
+            onPressed: onCopyVisible,
+          ),
+        ),
+        Tooltip(
+          message: 'Copy full raw output',
+          child: ClButton.iconOnly(
+            icon: ClIcons.copy,
+            size: ClButtonSize.sm,
+            onPressed: onCopyAll,
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _SelectableRawLogView extends StatelessWidget {
+  const _SelectableRawLogView({
+    required this.text,
+    required this.emptyMessage,
+    required this.controller,
+  });
+
+  final String text;
+  final String emptyMessage;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brandColors;
+    if (text.isEmpty) {
+      return Center(
+        child: Text(
+          emptyMessage,
+          style: context.dataSmall.copyWith(color: brand.ink3),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    return Scrollbar(
+      controller: controller,
+      child: SingleChildScrollView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        child: SizedBox(
+          width: double.infinity,
+          child: SelectableText(
+            text,
+            style: context.dataTiny.copyWith(color: brand.ink2, height: 1.6),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1677,9 +1850,8 @@ class _CommandSpec {
 
 List<ClLogEntry> _logEntries(String output) {
   final lines = output.split(RegExp(r'\r?\n'));
-  final start = lines.length > 1200 ? lines.length - 1200 : 0;
   return [
-    for (var i = start; i < lines.length; i++)
+    for (var i = 0; i < lines.length; i++)
       if (lines[i].isNotEmpty)
         ClLogEntry(
           time: (i + 1).toString().padLeft(3, '0'),
@@ -1688,6 +1860,10 @@ List<ClLogEntry> _logEntries(String output) {
           tone: _toneFor(lines[i]),
         ),
   ];
+}
+
+String _logTextForEntries(List<ClLogEntry> entries) {
+  return entries.map((entry) => entry.message).join('\n');
 }
 
 String _tagFor(String line) {
@@ -1888,9 +2064,7 @@ String _quoteForDisplay(String value) {
 }
 
 String _truncateOutput(String output) {
-  if (output.length <= _maxStoredOutputChars) return output;
-  final tail = output.substring(output.length - _maxStoredOutputChars);
-  return 'output truncated to last $_maxStoredOutputChars characters\n$tail';
+  return output;
 }
 
 String _timeLabel(DateTime value) {
