@@ -279,12 +279,9 @@ def run_command(
 
 
 def ensure_host(target_name: str, target: dict[str, Any], skip_unsupported: bool) -> bool:
-    hosts = target.get("hosts") or target.get("host")
-    if not hosts:
+    allowed = target_allowed_hosts(target)
+    if not allowed:
         return True
-    if isinstance(hosts, str):
-        hosts = [hosts]
-    allowed = {HOST_ALIASES.get(str(host).lower(), str(host).lower()) for host in hosts}
     host = current_host()
     if host in allowed or "any" in allowed:
         return True
@@ -293,6 +290,15 @@ def ensure_host(target_name: str, target: dict[str, Any], skip_unsupported: bool
         print(f"skip: {message}")
         return False
     raise BuildError(message)
+
+
+def target_allowed_hosts(target: dict[str, Any]) -> set[str]:
+    hosts = target.get("hosts") or target.get("host")
+    if not hosts:
+        return set()
+    if isinstance(hosts, str):
+        hosts = [hosts]
+    return {HOST_ALIASES.get(str(host).lower(), str(host).lower()) for host in hosts}
 
 
 def tool_status(tool: str) -> tuple[bool, str]:
@@ -314,6 +320,66 @@ def tool_install_commands(tool: str) -> list[str]:
         host = current_host()
         return string_list(install.get(host) or install.get("default"))
     return string_list(install)
+
+
+def collect_target_tools(
+    config: ProductConfig,
+    target_names: list[str],
+    skip_unsupported: bool,
+) -> set[str]:
+    tools = set(config.data.get("tools", {}).get("required", []) or [])
+    for target_name in target_names:
+        target = config.target(target_name)
+        if not ensure_host(target_name, target, skip_unsupported=skip_unsupported):
+            continue
+        tools.update(target.get("tools", []) or [])
+    return tools
+
+
+def install_deps_for_targets(
+    config: ProductConfig,
+    target_names: list[str],
+    *,
+    dry_run: bool,
+    skip_existing: bool,
+    skip_unsupported: bool,
+    quiet_existing: bool = False,
+    quiet_empty: bool = False,
+) -> int:
+    tools = collect_target_tools(config, target_names, skip_unsupported)
+    if not tools:
+        if not quiet_empty:
+            print("No tools declared for selected targets.")
+        return 0
+
+    missing_manual: list[str] = []
+    for tool in sorted(tools):
+        ok, detail = tool_status(tool)
+        if ok and skip_existing:
+            if not quiet_existing:
+                print(f"ok: {tool}: {detail}")
+            continue
+
+        commands = tool_install_commands(tool)
+        if not commands:
+            if ok:
+                print(f"manual: {tool}: no installer configured; already present at {detail}")
+            else:
+                print(f"manual: {tool}: {detail}")
+                missing_manual.append(tool)
+            continue
+
+        print(f"install: {tool}")
+        for command in commands:
+            run_command(command, TOOL_ROOT, dict(os.environ), dry_run)
+
+    if missing_manual:
+        raise BuildError(
+            "No installer configured for missing tools: "
+            + ", ".join(missing_manual)
+            + ". Add [tools.<name>].install to build.toml or install them manually."
+        )
+    return 0
 
 
 def require_target_tools(config: ProductConfig, target_name: str, target: dict[str, Any]) -> None:
@@ -763,44 +829,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def cmd_install_deps(args: argparse.Namespace) -> int:
     config = load_product(args)
     targets = config.expand_targets(args.targets)
-    tools = set(config.data.get("tools", {}).get("required", []) or [])
-    for target_name in targets:
-        target = config.target(target_name)
-        if not ensure_host(target_name, target, skip_unsupported=args.skip_unsupported):
-            continue
-        tools.update(target.get("tools", []) or [])
-
-    if not tools:
-        print("No tools declared for selected targets.")
-        return 0
-
-    missing_manual: list[str] = []
-    for tool in sorted(tools):
-        ok, detail = tool_status(tool)
-        if ok and args.skip_existing:
-            print(f"ok: {tool}: {detail}")
-            continue
-
-        commands = tool_install_commands(tool)
-        if not commands:
-            if ok:
-                print(f"manual: {tool}: no installer configured; already present at {detail}")
-            else:
-                print(f"manual: {tool}: {detail}")
-                missing_manual.append(tool)
-            continue
-
-        print(f"install: {tool}")
-        for command in commands:
-            run_command(command, TOOL_ROOT, dict(os.environ), args.dry_run)
-
-    if missing_manual:
-        raise BuildError(
-            "No installer configured for missing tools: "
-            + ", ".join(missing_manual)
-            + ". Add [tools.<name>].install to build.toml or install them manually."
-        )
-    return 0
+    return install_deps_for_targets(
+        config,
+        targets,
+        dry_run=args.dry_run,
+        skip_existing=args.skip_existing,
+        skip_unsupported=args.skip_unsupported,
+    )
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -809,6 +844,17 @@ def cmd_build(args: argparse.Namespace) -> int:
         return cmd_github_build(config, args)
 
     targets = config.expand_targets(args.targets)
+    if args.install_missing_deps:
+        install_deps_for_targets(
+            config,
+            targets,
+            dry_run=args.dry_run,
+            skip_existing=True,
+            skip_unsupported=args.skip_unsupported,
+            quiet_existing=True,
+            quiet_empty=True,
+        )
+
     stamp = compute_stamp(config)
     extra_env = buildroot_env(args)
     for target in targets:
@@ -912,6 +958,16 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
         print(f"\n## {config.display_name} ({product_name})")
         try:
             targets = config.expand_targets(args.targets or ["desktop"])
+            if args.install_missing_deps:
+                install_deps_for_targets(
+                    config,
+                    targets,
+                    dry_run=args.dry_run,
+                    skip_existing=True,
+                    skip_unsupported=args.skip_unsupported,
+                    quiet_existing=True,
+                    quiet_empty=True,
+                )
             for target in targets:
                 run_target(
                     config=config,
@@ -970,6 +1026,12 @@ def add_local_build_args(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Check target tools before local command execution. Defaults to true.",
+    )
+    parser.add_argument(
+        "--install-missing-deps",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Install configured missing local tools before building. Defaults to false.",
     )
 
 

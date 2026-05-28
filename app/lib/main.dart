@@ -798,6 +798,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     }
 
     args.addAll(['--mode', _settings.buildMode]);
+    if (!dryRun) args.add('--install-missing-deps');
     if (_settings.skipUnsupported) args.add('--skip-unsupported');
     if (_settings.product == 'foundry') {
       final buildrootDir = _settings.buildrootDir.trim();
@@ -1052,24 +1053,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   onPressed: _isRunning ? null : () => _run(BuildAction.plan),
                   child: const Text('Plan'),
                 ),
-                if (!_isGitHubMode) ...[
-                  ClButton(
-                    icon: ClIcons.check,
-                    kind: ClButtonKind.outlined,
-                    onPressed: _isRunning
-                        ? null
-                        : () => _run(BuildAction.doctor),
-                    child: const Text('Check Deps'),
-                  ),
-                  ClButton(
-                    icon: ClIcons.download,
-                    kind: ClButtonKind.outlined,
-                    onPressed: _isRunning
-                        ? null
-                        : () => _run(BuildAction.installDeps),
-                    child: const Text('Install Deps'),
-                  ),
-                ],
                 if (_isGitHubMode)
                   ClButton(
                     icon: ClIcons.grid,
@@ -1115,15 +1098,17 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
   Widget _buildConsoleWorkspace(BoxConstraints constraints) {
     if (constraints.maxWidth < 980) {
+      final logHeight = (constraints.maxHeight * 0.76).clamp(420.0, 760.0);
+      final historyHeight = (constraints.maxHeight * 0.56).clamp(360.0, 560.0);
       return SingleChildScrollView(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 48),
         child: Column(
           children: [
             _buildControlsPanel(),
             const SizedBox(height: 12),
-            SizedBox(height: 440, child: _buildLogPanel()),
+            SizedBox(height: logHeight, child: _buildLogPanel()),
             const SizedBox(height: 12),
-            SizedBox(height: 420, child: _buildHistoryPanel()),
+            SizedBox(height: historyHeight, child: _buildHistoryPanel()),
           ],
         ),
       );
@@ -1341,6 +1326,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               entries: _logEntries(_visibleOutput),
               emptyMessage:
                   'No output yet. Run plan, matrix, dry-run, or build.',
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
               timeColumnWidth: 42,
               tagColumnWidth: 72,
             ),

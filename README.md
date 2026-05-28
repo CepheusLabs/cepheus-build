@@ -25,7 +25,7 @@ From a checkout beside the app repos:
 ./bin/cepheus-build list
 ./bin/cepheus-build plan -p printdeck all
 ./bin/cepheus-build doctor -p anvil desktop
-./bin/cepheus-build build -p colorwake-studio macos
+./bin/cepheus-build build -p colorwake-studio macos --install-missing-deps
 ./bin/cepheus-build artifacts -p deckhand desktop_packages --copy-to dist/deckhand
 ./bin/cepheus-build plan -p foundry os
 ./bin/cepheus-build local-sweep printdeck deckhand --targets desktop --dry-run
@@ -45,7 +45,8 @@ profiles loaded from `build.toml`. Product repositories and workflow names come
 from each `products/*.toml` file. Local run history is stored in
 `history/build-history.json` so the team can commit it when useful. The console
 also reads `[stores.*]` lanes from product configs for deploy preview and
-store submission runs.
+store submission runs. Local Build runs automatically install configured
+missing tools before starting the build; Dry Run keeps to preview output only.
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
 
