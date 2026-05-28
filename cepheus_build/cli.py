@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -20,13 +21,7 @@ from typing import Any
 
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_DIR = TOOL_ROOT / "products"
-
-DEFAULT_GROUPS: dict[str, list[str]] = {
-    "desktop": ["macos", "windows", "linux"],
-    "mobile": ["ios", "android"],
-    "apple": ["ios", "macos"],
-    "all": ["web", "android", "ios", "macos", "windows", "linux"],
-}
+TOOL_CONFIG_PATH = TOOL_ROOT / "build.toml"
 
 HOST_ALIASES = {
     "darwin": "macos",
@@ -38,33 +33,6 @@ HOST_ALIASES = {
 }
 
 HOST_ORDER = ["linux", "macos", "windows"]
-
-GITHUB_HOSTED_RUNNERS: dict[str, str | list[str]] = {
-    "linux": "ubuntu-latest",
-    "macos": "macos-latest",
-    "windows": "windows-latest",
-}
-
-SELF_HOSTED_RUNNERS: dict[str, str | list[str]] = {
-    "linux": ["self-hosted", "linux"],
-    "macos": ["self-hosted", "macos"],
-    "windows": ["self-hosted", "windows"],
-}
-
-TARGET_HOST_PREFERENCES: dict[str, list[str]] = {
-    "android": ["linux", "macos", "windows"],
-    "ios": ["macos"],
-    "linux": ["linux"],
-    "linux-appimage": ["linux"],
-    "linux-deb": ["linux"],
-    "macos": ["macos"],
-    "macos-appstore": ["macos"],
-    "macos-dmg": ["macos"],
-    "web": ["linux", "macos", "windows"],
-    "windows": ["windows"],
-    "windows-installer": ["windows"],
-    "windows-msix": ["windows"],
-}
 
 VIRTUAL_TOOLS = {"buildroot"}
 
@@ -93,6 +61,10 @@ def shell_quote(value: str) -> str:
     return shlex.quote(value)
 
 
+def display_command(executable: str, args: list[str]) -> str:
+    return " ".join([shell_quote(executable), *[shell_quote(arg) for arg in args]])
+
+
 def load_toml(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as handle:
@@ -101,6 +73,10 @@ def load_toml(path: Path) -> dict[str, Any]:
         raise BuildError(f"Config not found: {path}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise BuildError(f"Invalid TOML in {path}: {exc}") from exc
+
+
+def load_tool_config() -> dict[str, Any]:
+    return load_toml(TOOL_CONFIG_PATH)
 
 
 def resolve_path(raw: str | Path, base: Path) -> Path:
@@ -175,7 +151,7 @@ class ProductConfig:
 
     @property
     def groups(self) -> dict[str, list[str]]:
-        merged = {name: list(targets) for name, targets in DEFAULT_GROUPS.items()}
+        merged: dict[str, list[str]] = {}
         for name, value in self.data.get("groups", {}).items():
             if isinstance(value, dict):
                 targets = value.get("targets", [])
@@ -183,6 +159,10 @@ class ProductConfig:
                 targets = value
             merged[name] = list(targets)
         return merged
+
+    @property
+    def github(self) -> dict[str, Any]:
+        return self.data.get("github", {})
 
     @property
     def stores(self) -> dict[str, Any]:
@@ -253,7 +233,11 @@ def resolve_value(spec: Any, env: dict[str, str]) -> str:
     return os.path.expandvars(value)
 
 
-def build_env(config: ProductConfig, stamp: Stamp) -> dict[str, str]:
+def build_env(
+    config: ProductConfig,
+    stamp: Stamp,
+    extra_env: dict[str, str] | None = None,
+) -> dict[str, str]:
     env = dict(os.environ)
     env_prefix = str(config.version.get("env_prefix") or config.slug).upper().replace("-", "_")
     existing_pythonpath = env.get("PYTHONPATH")
@@ -276,6 +260,8 @@ def build_env(config: ProductConfig, stamp: Stamp) -> dict[str, str]:
             f"{env_prefix}_BUILD_NUMBER": stamp.build_number,
         }
     )
+    if extra_env:
+        env.update({key: value for key, value in extra_env.items() if value})
     return env
 
 
@@ -378,12 +364,13 @@ def run_target(
     build_mode: str,
     extra_args: list[str],
     skip_unsupported: bool,
+    extra_env: dict[str, str] | None = None,
 ) -> None:
     target = config.target(target_name)
     if not ensure_host(target_name, target, skip_unsupported):
         return
 
-    env = build_env(config, stamp)
+    env = build_env(config, stamp, extra_env)
     print(f"\n==> {config.display_name}: {target_name} ({stamp.full})")
 
     cwd = resolve_path(target.get("cwd", "."), config.repo_root)
@@ -437,26 +424,151 @@ def normalize_hosts(value: Any) -> list[str]:
     return normalized or list(HOST_ORDER)
 
 
+def github_config() -> dict[str, Any]:
+    return load_tool_config().get("github", {})
+
+
+def runner_profile_names() -> list[str]:
+    profiles = github_config().get("runner_profiles", {})
+    return sorted(profiles)
+
+
+def runner_profile_config(profile: str) -> dict[str, Any]:
+    profiles = github_config().get("runner_profiles", {})
+    profile_config = profiles.get(profile)
+    if not isinstance(profile_config, dict):
+        known = ", ".join(sorted(profiles)) or "none"
+        raise BuildError(f"Unknown runner profile '{profile}'. Known profiles: {known}")
+    return profile_config
+
+
 def runner_map(profile: str) -> dict[str, str | list[str]]:
-    if profile == "github-hosted":
-        return GITHUB_HOSTED_RUNNERS
-    if profile == "self-hosted":
-        return SELF_HOSTED_RUNNERS
-    raise BuildError("runner profile must be github-hosted or self-hosted")
+    profile_config = runner_profile_config(profile)
+    runners: dict[str, str | list[str]] = {}
+    for host in HOST_ORDER:
+        value = profile_config.get(host)
+        if value:
+            runners[host] = value
+    if not runners:
+        raise BuildError(f"Runner profile '{profile}' does not define any host runners.")
+    return runners
+
+
+def planner_runner_json(profile: str) -> str:
+    profile_config = runner_profile_config(profile)
+    planner = profile_config.get("planner") or profile_config.get("linux")
+    if not planner:
+        raise BuildError(f"Runner profile '{profile}' does not define planner or linux runner.")
+    return json.dumps(planner, separators=(",", ":"))
+
+
+def default_github_workflow(config: ProductConfig) -> str:
+    workflow = config.github.get("workflow") or github_config().get("default_workflow")
+    if not workflow:
+        raise BuildError("No GitHub workflow configured. Set [github].default_workflow in build.toml or [github].workflow in the product config.")
+    return str(workflow)
+
+
+def github_repo_from_remote(url: str) -> str | None:
+    stripped = url.strip()
+    patterns = [
+        r"^https://github\.com/(?P<repo>[^/]+/[^/.]+)(?:\.git)?/?$",
+        r"^git@github\.com:(?P<repo>[^/]+/[^/.]+)(?:\.git)?$",
+        r"^ssh://git@github\.com/(?P<repo>[^/]+/[^/.]+)(?:\.git)?/?$",
+    ]
+    for pattern in patterns:
+        match = re.match(pattern, stripped)
+        if match:
+            return match.group("repo")
+    return None
+
+
+def detected_github_repo(repo_root: Path) -> str | None:
+    try:
+        remote = git_output(["remote", "get-url", "origin"], repo_root)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return github_repo_from_remote(remote)
+
+
+def github_repository(config: ProductConfig, override: str | None = None) -> str:
+    if override and override.strip():
+        return override.strip()
+    configured = config.github.get("repository") or config.github.get("repo")
+    if configured:
+        return str(configured)
+    detected = detected_github_repo(config.repo_root)
+    if detected:
+        return detected
+    raise BuildError(
+        "No GitHub repository configured. Pass --github-repo, add [github].repository to the product config, or set an origin remote on the product repo."
+    )
+
+
+def bool_input(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def buildroot_env(args: argparse.Namespace) -> dict[str, str]:
+    buildroot_dir = getattr(args, "buildroot_dir", "") or ""
+    if not buildroot_dir.strip():
+        return {}
+    return {"BUILDROOT_DIR": buildroot_dir.strip()}
+
+
+def github_dispatch_args(config: ProductConfig, args: argparse.Namespace) -> list[str]:
+    workflow = getattr(args, "github_workflow", "") or default_github_workflow(config)
+    repo = github_repository(config, getattr(args, "github_repo", None))
+    requested_targets = getattr(args, "targets", None) or ["desktop"]
+    dispatch_args = [
+        "workflow",
+        "run",
+        workflow,
+        "-R",
+        repo,
+        "-f",
+        f"targets={' '.join(requested_targets)}",
+        "-f",
+        f"runner-profile={args.runner_profile}",
+        "-f",
+        f"mode={args.mode}",
+        "-f",
+        f"planner-runner-json={args.planner_runner_json or planner_runner_json(args.runner_profile)}",
+    ]
+    if config.slug == "foundry":
+        dispatch_args.extend(
+            [
+                "-f",
+                f"setup-buildroot-deps={bool_input(args.setup_buildroot_deps)}",
+            ]
+        )
+        buildroot_dir = args.buildroot_dir.strip()
+        if buildroot_dir:
+            dispatch_args.extend(["-f", f"buildroot-dir={buildroot_dir}"])
+    return dispatch_args
+
+
+def cmd_github_build(config: ProductConfig, args: argparse.Namespace) -> int:
+    dispatch_args = github_dispatch_args(config, args)
+    display = display_command("gh", dispatch_args)
+    print(f"+ {display}")
+    if args.dry_run:
+        return 0
+    cwd = config.repo_root if getattr(args, "repo_root", None) else TOOL_ROOT
+    if not cwd.exists():
+        cwd = TOOL_ROOT
+    subprocess.run(["gh", *dispatch_args], cwd=cwd, check=True)
+    return 0
 
 
 def preferred_host_for_target(target_name: str, target: dict[str, Any]) -> str | None:
     allowed = normalize_hosts(target.get("hosts") or target.get("host"))
-    preferences = TARGET_HOST_PREFERENCES.get(target_name)
-    if not preferences:
-        if target_name.startswith("windows"):
-            preferences = ["windows"]
-        elif target_name.startswith("macos") or target_name.startswith("ios"):
-            preferences = ["macos"]
-        elif target_name.startswith("linux"):
-            preferences = ["linux"]
-        else:
-            preferences = HOST_ORDER
+    preferences = normalize_hosts(
+        target.get("ci_hosts")
+        or target.get("preferred_hosts")
+        or target.get("preferred_host")
+        or allowed
+    )
     for host in preferences:
         if host in allowed:
             return host
@@ -595,8 +707,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_build(args: argparse.Namespace) -> int:
     config = load_product(args)
+    if args.execution_mode == "github":
+        return cmd_github_build(config, args)
+
     targets = config.expand_targets(args.targets)
     stamp = compute_stamp(config)
+    extra_env = buildroot_env(args)
     for target in targets:
         run_target(
             config=config,
@@ -606,6 +722,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             build_mode=args.mode,
             extra_args=args.flutter_arg or [],
             skip_unsupported=args.skip_unsupported,
+            extra_env=extra_env,
         )
     return 0
 
@@ -673,10 +790,104 @@ def cmd_ci_matrix(args: argparse.Namespace) -> int:
     return 0
 
 
+def all_product_names() -> list[str]:
+    return [path.stem for path in sorted(PRODUCTS_DIR.glob("*.toml"))]
+
+
+def cmd_local_sweep(args: argparse.Namespace) -> int:
+    product_names = args.products or all_product_names()
+    excluded = set(args.exclude or [])
+    product_names = [name for name in product_names if name not in excluded]
+    if not product_names:
+        raise BuildError("No products selected for local-sweep.")
+
+    failures: list[tuple[str, str]] = []
+    for product_name in product_names:
+        config_path = find_config(product_name, None)
+        config = ProductConfig(
+            path=config_path,
+            data=load_toml(config_path),
+        )
+        stamp = compute_stamp(config)
+        extra_env = buildroot_env(args)
+        print(f"\n## {config.display_name} ({product_name})")
+        try:
+            targets = config.expand_targets(args.targets or ["desktop"])
+            for target in targets:
+                run_target(
+                    config=config,
+                    target_name=target,
+                    stamp=stamp,
+                    dry_run=args.dry_run,
+                    build_mode=args.mode,
+                    extra_args=args.flutter_arg or [],
+                    skip_unsupported=args.skip_unsupported,
+                    extra_env=extra_env,
+                )
+        except Exception as exc:
+            failures.append((product_name, str(exc)))
+            print(f"failed: {product_name}: {exc}", file=sys.stderr)
+            if not args.keep_going:
+                break
+
+    print("\n## Local sweep summary")
+    if not failures:
+        print(f"ok: {', '.join(product_names)}")
+        return 0
+    for product_name, message in failures:
+        print(f"failed: {product_name}: {message}")
+    return 1
+
+
 def add_product_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-p", "--product", help="Product name from products/<name>.toml.")
     parser.add_argument("-c", "--config", help="Path to a product config TOML file.")
     parser.add_argument("--repo-root", help="Override product.repo_root. Useful in CI.")
+
+
+def add_local_build_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--mode", choices=["release", "profile", "debug"], default="release")
+    parser.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
+    parser.add_argument(
+        "--skip-unsupported",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip targets that need another host OS. Defaults to true.",
+    )
+    parser.add_argument(
+        "--flutter-arg",
+        action="append",
+        default=[],
+        help="Additional raw argument to pass to default Flutter build targets. Repeat as needed.",
+    )
+    parser.add_argument(
+        "--buildroot-dir",
+        default="",
+        help="Optional Buildroot checkout path for Foundry targets or workflow dispatch.",
+    )
+
+
+def add_github_build_args(parser: argparse.ArgumentParser) -> None:
+    profiles = runner_profile_names()
+    parser.add_argument(
+        "--runner-profile",
+        choices=profiles or None,
+        default=profiles[0] if profiles else "github-hosted",
+        help="Runner profile from build.toml.",
+    )
+    parser.add_argument("--github-repo", default="", help="Override [github].repository or detected origin.")
+    parser.add_argument("--github-workflow", default="", help="Override [github].workflow or build.toml default.")
+    parser.add_argument(
+        "--planner-runner-json",
+        default="",
+        help="Override the JSON runs-on value for the planning job.",
+    )
+    parser.add_argument(
+        "--setup-buildroot-deps",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Install Buildroot dependencies in GitHub workflows when the matrix requires them.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -704,15 +915,14 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build", help="Build product targets.")
     add_product_args(build)
     build.add_argument("targets", nargs="*", help="Targets or groups. Defaults to desktop.")
-    build.add_argument("--mode", choices=["release", "profile", "debug"], default="release")
-    build.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
-    build.add_argument("--skip-unsupported", action="store_true", help="Skip targets that need another host OS.")
     build.add_argument(
-        "--flutter-arg",
-        action="append",
-        default=[],
-        help="Additional raw argument to pass to default Flutter build targets. Repeat as needed.",
+        "--execution-mode",
+        choices=["local", "github"],
+        default="local",
+        help="Run locally or dispatch the configured GitHub workflow.",
     )
+    add_local_build_args(build)
+    add_github_build_args(build)
     build.set_defaults(func=cmd_build)
 
     artifacts = sub.add_parser("artifacts", help="List expected artifacts for targets.")
@@ -730,14 +940,33 @@ def build_parser() -> argparse.ArgumentParser:
     ci_matrix = sub.add_parser("ci-matrix", help="Generate a GitHub Actions matrix for product targets.")
     add_product_args(ci_matrix)
     ci_matrix.add_argument("targets", nargs="*", help="Targets or groups. Defaults to all.")
+    profiles = runner_profile_names()
     ci_matrix.add_argument(
         "--runner-profile",
-        choices=["github-hosted", "self-hosted"],
-        default="github-hosted",
-        help="Use GitHub-provided runners or organization self-hosted runners.",
+        choices=profiles or None,
+        default=profiles[0] if profiles else "github-hosted",
+        help="Runner profile from build.toml.",
     )
     ci_matrix.add_argument("--pretty", action="store_true", help="Print indented JSON.")
     ci_matrix.set_defaults(func=cmd_ci_matrix)
+
+    local_sweep = sub.add_parser("local-sweep", help="Run local builds for products one by one.")
+    local_sweep.add_argument("products", nargs="*", help="Products to run. Defaults to all product configs.")
+    local_sweep.add_argument(
+        "--targets",
+        nargs="+",
+        default=["desktop"],
+        help="Targets or groups for each product. Defaults to desktop.",
+    )
+    local_sweep.add_argument("--exclude", action="append", help="Product to skip. Repeat as needed.")
+    add_local_build_args(local_sweep)
+    local_sweep.add_argument(
+        "--keep-going",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Continue after a product fails. Defaults to true.",
+    )
+    local_sweep.set_defaults(func=cmd_local_sweep)
 
     return parser
 

@@ -29,23 +29,6 @@ enum ExecutionMode {
   }
 }
 
-enum RunnerProfile {
-  githubHosted('GitHub-provided', 'github-hosted'),
-  selfHosted('Org self-hosted', 'self-hosted');
-
-  const RunnerProfile(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  static RunnerProfile fromValue(String value) {
-    return RunnerProfile.values.firstWhere(
-      (profile) => profile.value == value,
-      orElse: () => RunnerProfile.githubHosted,
-    );
-  }
-}
-
 class BuildSettings {
   const BuildSettings({
     required this.toolkitRoot,
@@ -68,7 +51,7 @@ class BuildSettings {
       product: 'printdeck',
       targets: 'all',
       executionMode: ExecutionMode.local,
-      runnerProfile: RunnerProfile.githubHosted,
+      runnerProfile: 'github-hosted',
       buildMode: 'release',
       repoRoot: '',
       githubRepo: '',
@@ -90,9 +73,7 @@ class BuildSettings {
       executionMode: ExecutionMode.fromValue(
         _string(json['executionMode'], ExecutionMode.local.value),
       ),
-      runnerProfile: RunnerProfile.fromValue(
-        _string(json['runnerProfile'], RunnerProfile.githubHosted.value),
-      ),
+      runnerProfile: _string(json['runnerProfile'], 'github-hosted'),
       buildMode: _string(json['buildMode'], 'release'),
       repoRoot: _string(json['repoRoot'], ''),
       githubRepo: _string(json['githubRepo'], ''),
@@ -111,7 +92,7 @@ class BuildSettings {
   final String product;
   final String targets;
   final ExecutionMode executionMode;
-  final RunnerProfile runnerProfile;
+  final String runnerProfile;
   final String buildMode;
   final String repoRoot;
   final String githubRepo;
@@ -125,7 +106,7 @@ class BuildSettings {
     String? product,
     String? targets,
     ExecutionMode? executionMode,
-    RunnerProfile? runnerProfile,
+    String? runnerProfile,
     String? buildMode,
     String? repoRoot,
     String? githubRepo,
@@ -155,7 +136,7 @@ class BuildSettings {
       'product': product,
       'targets': targets,
       'executionMode': executionMode.value,
-      'runnerProfile': runnerProfile.value,
+      'runnerProfile': runnerProfile,
       'buildMode': buildMode,
       'repoRoot': repoRoot,
       'githubRepo': githubRepo,
@@ -197,9 +178,7 @@ class BuildHistoryEntry {
       executionMode: ExecutionMode.fromValue(
         _string(json['executionMode'], ExecutionMode.local.value),
       ),
-      runnerProfile: RunnerProfile.fromValue(
-        _string(json['runnerProfile'], RunnerProfile.githubHosted.value),
-      ),
+      runnerProfile: _string(json['runnerProfile'], 'github-hosted'),
       buildMode: _string(json['buildMode'], 'release'),
       repoRoot: _string(json['repoRoot'], ''),
       githubRepo: _string(json['githubRepo'], ''),
@@ -220,7 +199,7 @@ class BuildHistoryEntry {
   final String product;
   final String targets;
   final ExecutionMode executionMode;
-  final RunnerProfile runnerProfile;
+  final String runnerProfile;
   final String buildMode;
   final String repoRoot;
   final String githubRepo;
@@ -253,7 +232,7 @@ class BuildHistoryEntry {
       'product': product,
       'targets': targets,
       'executionMode': executionMode.value,
-      'runnerProfile': runnerProfile.value,
+      'runnerProfile': runnerProfile,
       'buildMode': buildMode,
       'repoRoot': repoRoot,
       'githubRepo': githubRepo,

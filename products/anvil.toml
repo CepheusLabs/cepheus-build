@@ -7,6 +7,9 @@ app_dir = "app"
 [version]
 env_prefix = "ANVIL"
 
+[github]
+repository = "CepheusLabs/anvil"
+
 [groups]
 desktop = ["macos", "windows", "linux"]
 mobile = ["ios", "android"]

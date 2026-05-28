@@ -9,22 +9,31 @@ import 'build_models.dart';
 
 const _maxHistoryEntries = 250;
 const _maxStoredOutputChars = 160000;
-const _targetPresets = [
-  'all',
-  'desktop',
-  'mobile',
-  'release',
-  'quality',
-  'os',
-  'mcu',
-];
-const _fallbackProducts = [
-  'anvil',
-  'colorwake-studio',
-  'deckhand',
-  'foundry',
-  'printdeck',
-];
+
+class _ProductDescriptor {
+  const _ProductDescriptor({
+    required this.product,
+    required this.targetChoices,
+    this.githubRepo = '',
+    this.githubWorkflow = '',
+  });
+
+  factory _ProductDescriptor.empty(String product) {
+    return _ProductDescriptor(product: product, targetChoices: const ['all']);
+  }
+
+  final String product;
+  final List<String> targetChoices;
+  final String githubRepo;
+  final String githubWorkflow;
+}
+
+class _RunnerProfileChoice {
+  const _RunnerProfileChoice({required this.value, required this.label});
+
+  final String value;
+  final String label;
+}
 
 void main() {
   runApp(const CepheusBuildConsoleApp());
@@ -73,7 +82,6 @@ class BuildConsoleHome extends StatefulWidget {
 class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   late BuildSettings _settings;
   late TextEditingController _repoRootController;
-  late TextEditingController _targetsController;
   late TextEditingController _toolkitRootController;
   late TextEditingController _githubRepoController;
   late TextEditingController _githubWorkflowController;
@@ -83,6 +91,8 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   final ScrollController _logScrollController = ScrollController();
 
   List<String> _products = const [];
+  List<_RunnerProfileChoice> _runnerProfiles = const [];
+  _ProductDescriptor _productDescriptor = _ProductDescriptor.empty('printdeck');
   List<BuildHistoryEntry> _history = const [];
   BuildHistoryEntry? _selectedHistory;
   Process? _process;
@@ -94,6 +104,30 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   bool _showLiveOutput = true;
 
   bool get _isRunning => _process != null;
+  bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
+  bool get _isFoundry => _settings.product == 'foundry';
+
+  List<_RunnerProfileChoice> get _availableRunnerProfiles {
+    if (_runnerProfiles.any(
+      (profile) => profile.value == _settings.runnerProfile,
+    )) {
+      return _runnerProfiles;
+    }
+    return [
+      _RunnerProfileChoice(
+        value: _settings.runnerProfile,
+        label: _settings.runnerProfile,
+      ),
+      ..._runnerProfiles,
+    ];
+  }
+
+  String _runnerProfileLabel(String profile) {
+    for (final choice in _runnerProfiles) {
+      if (choice.value == profile) return choice.label;
+    }
+    return profile;
+  }
 
   File get _historyFile =>
       File(_joinPath(_settings.toolkitRoot, 'history', 'build-history.json'));
@@ -112,7 +146,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     final root = _defaultToolkitRoot();
     _settings = BuildSettings.defaults(toolkitRoot: root);
     _repoRootController = TextEditingController(text: _settings.repoRoot);
-    _targetsController = TextEditingController(text: _settings.targets);
     _toolkitRootController = TextEditingController(text: _settings.toolkitRoot);
     _githubRepoController = TextEditingController(
       text: _effectiveGitHubRepo(_settings),
@@ -130,7 +163,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   void dispose() {
     _process?.kill(ProcessSignal.sigterm);
     _repoRootController.dispose();
-    _targetsController.dispose();
     _toolkitRootController.dispose();
     _githubRepoController.dispose();
     _githubWorkflowController.dispose();
@@ -168,12 +200,30 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     try {
       products = await _loadProducts(toolkitRoot);
     } on Object catch (error) {
-      products = _fallbackProducts;
       message = 'Products could not be loaded: $error';
     }
     if (products.isNotEmpty && !products.contains(settings.product)) {
       settings = settings.copyWith(product: products.first);
     }
+    var runnerProfiles = <_RunnerProfileChoice>[];
+    try {
+      runnerProfiles = await _loadRunnerProfiles(toolkitRoot);
+    } on Object catch (error) {
+      message = 'Runner profiles could not be loaded: $error';
+    }
+    if (runnerProfiles.isNotEmpty &&
+        !runnerProfiles.any(
+          (profile) => profile.value == settings.runnerProfile,
+        )) {
+      settings = settings.copyWith(runnerProfile: runnerProfiles.first.value);
+    }
+    var descriptor = _ProductDescriptor.empty(settings.product);
+    try {
+      descriptor = await _loadProductDescriptor(toolkitRoot, settings.product);
+    } on Object catch (error) {
+      message = 'Product config could not be loaded: $error';
+    }
+    settings = _settingsForDescriptor(settings, descriptor);
 
     if (!mounted) return;
     setState(() {
@@ -181,9 +231,10 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       _history = entries;
       _selectedHistory = entries.isEmpty ? null : entries.first;
       _products = products;
+      _runnerProfiles = runnerProfiles;
+      _productDescriptor = descriptor;
       _loading = false;
       _repoRootController.text = settings.repoRoot;
-      _targetsController.text = settings.targets;
       _toolkitRootController.text = settings.toolkitRoot;
       _githubRepoController.text = _effectiveGitHubRepo(settings);
       _githubWorkflowController.text = settings.githubWorkflow;
@@ -204,7 +255,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   Future<List<String>> _loadProducts(String toolkitRoot) async {
     final productsDir = Directory(_joinPath(toolkitRoot, 'products'));
     if (!await productsDir.exists()) {
-      return _fallbackProducts;
+      return const [];
     }
 
     final products = <String>[];
@@ -214,6 +265,126 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     }
     products.sort();
     return products;
+  }
+
+  Future<_ProductDescriptor> _loadProductDescriptor(
+    String toolkitRoot,
+    String product,
+  ) async {
+    final file = File(_joinPath(toolkitRoot, 'products', '$product.toml'));
+    if (!await file.exists()) return _ProductDescriptor.empty(product);
+
+    final groups = <String>[];
+    final targets = <String>[];
+    var githubRepo = '';
+    var githubWorkflow = '';
+    var section = '';
+
+    for (final rawLine in await file.readAsLines()) {
+      final line = _stripTomlComment(rawLine).trim();
+      if (line.isEmpty) continue;
+
+      final sectionName = _tomlSection(line);
+      if (sectionName != null) {
+        section = sectionName;
+        final targetName = _targetSectionName(sectionName);
+        if (targetName != null && !targets.contains(targetName)) {
+          targets.add(targetName);
+        }
+        continue;
+      }
+
+      if (section == 'groups') {
+        final groupName = _tomlAssignmentName(line);
+        if (groupName != null && !groups.contains(groupName)) {
+          groups.add(groupName);
+        }
+      } else if (section == 'github') {
+        githubRepo = _tomlStringValue(line, 'repository') ?? githubRepo;
+        githubWorkflow = _tomlStringValue(line, 'workflow') ?? githubWorkflow;
+      }
+    }
+
+    final choices = _uniqueStrings([
+      ...groups,
+      ...targets,
+      if (groups.isEmpty && targets.isEmpty) 'all',
+    ]);
+    return _ProductDescriptor(
+      product: product,
+      targetChoices: choices,
+      githubRepo: githubRepo,
+      githubWorkflow: githubWorkflow,
+    );
+  }
+
+  Future<List<_RunnerProfileChoice>> _loadRunnerProfiles(
+    String toolkitRoot,
+  ) async {
+    final file = File(_joinPath(toolkitRoot, 'build.toml'));
+    if (!await file.exists()) return const [];
+
+    final profiles = <_RunnerProfileChoice>[];
+    var section = '';
+    var currentProfile = '';
+    var currentLabel = '';
+
+    void flush() {
+      if (currentProfile.isEmpty) return;
+      profiles.add(
+        _RunnerProfileChoice(
+          value: currentProfile,
+          label: currentLabel.isEmpty ? currentProfile : currentLabel,
+        ),
+      );
+      currentProfile = '';
+      currentLabel = '';
+    }
+
+    for (final rawLine in await file.readAsLines()) {
+      final line = _stripTomlComment(rawLine).trim();
+      if (line.isEmpty) continue;
+      final sectionName = _tomlSection(line);
+      if (sectionName != null) {
+        flush();
+        section = sectionName;
+        const prefix = 'github.runner_profiles.';
+        if (sectionName.startsWith(prefix)) {
+          currentProfile = sectionName.substring(prefix.length);
+        }
+        continue;
+      }
+      if (section.startsWith('github.runner_profiles.') &&
+          currentProfile.isNotEmpty) {
+        currentLabel = _tomlStringValue(line, 'label') ?? currentLabel;
+      }
+    }
+    flush();
+    return profiles;
+  }
+
+  BuildSettings _settingsForDescriptor(
+    BuildSettings settings,
+    _ProductDescriptor descriptor,
+  ) {
+    final targetChoices = descriptor.targetChoices;
+    var targets = settings.targets.trim();
+    if (!targetChoices.contains(targets)) {
+      targets = targetChoices.contains('all') ? 'all' : targetChoices.first;
+    }
+    var githubRepo = settings.githubRepo;
+    if (githubRepo.trim().isEmpty) {
+      githubRepo = descriptor.githubRepo;
+    }
+    var githubWorkflow = settings.githubWorkflow;
+    if (githubWorkflow.trim().isEmpty) {
+      githubWorkflow = descriptor.githubWorkflow;
+    }
+    return settings.copyWith(
+      targets: targets,
+      githubRepo: githubRepo,
+      githubWorkflow: githubWorkflow,
+    );
   }
 
   Future<void> _saveSnapshot() async {
@@ -252,42 +423,86 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
   Future<void> _refreshProducts() async {
     List<String> products;
+    List<_RunnerProfileChoice> runnerProfiles;
     try {
       products = await _loadProducts(_settings.toolkitRoot);
+      runnerProfiles = await _loadRunnerProfiles(_settings.toolkitRoot);
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() => _message = 'Products could not be loaded: $error');
+      setState(() => _message = 'Build config could not be loaded: $error');
       return;
     }
+    var settings = _settings;
     if (!mounted) return;
     setState(() {
       _products = products;
+      _runnerProfiles = runnerProfiles;
       if (products.isNotEmpty && !products.contains(_settings.product)) {
-        _settings = _settings.copyWith(product: products.first);
+        settings = _settings.copyWith(product: products.first);
       }
+      if (runnerProfiles.isNotEmpty &&
+          !runnerProfiles.any(
+            (profile) => profile.value == settings.runnerProfile,
+          )) {
+        settings = settings.copyWith(runnerProfile: runnerProfiles.first.value);
+      }
+      _settings = settings;
       _message = 'Products refreshed';
     });
+    await _setProduct(settings.product, save: false);
     _persistSnapshot();
   }
 
-  void _setProduct(String product) {
-    final previousDefault = _defaultGitHubRepoForProduct(_settings.product);
+  Future<void> _setProduct(String product, {bool save = true}) async {
+    final previousDescriptor = _productDescriptor;
     final currentRepo = _settings.githubRepo.trim();
     final shouldFollowProduct =
-        currentRepo.isEmpty || currentRepo == previousDefault;
-    final nextSettings = _settings.copyWith(
+        currentRepo.isEmpty || currentRepo == previousDescriptor.githubRepo;
+    final currentWorkflow = _settings.githubWorkflow.trim();
+    final shouldFollowWorkflow =
+        currentWorkflow.isEmpty ||
+        currentWorkflow == previousDescriptor.githubWorkflow;
+    var descriptor = _ProductDescriptor.empty(product);
+    try {
+      descriptor = await _loadProductDescriptor(_settings.toolkitRoot, product);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _message = 'Product config could not be loaded: $error');
+    }
+    var nextSettings = _settings.copyWith(
       product: product,
       githubRepo: shouldFollowProduct
-          ? _defaultGitHubRepoForProduct(product)
+          ? descriptor.githubRepo
           : _settings.githubRepo,
+      githubWorkflow: shouldFollowWorkflow
+          ? descriptor.githubWorkflow
+          : _settings.githubWorkflow,
     );
-    _githubRepoController.text = _effectiveGitHubRepo(nextSettings);
-    _updateSettings(nextSettings);
+    nextSettings = _settingsForDescriptor(nextSettings, descriptor);
+    if (!mounted) return;
+    setState(() {
+      _productDescriptor = descriptor;
+      _settings = nextSettings;
+      _githubRepoController.text = _effectiveGitHubRepo(nextSettings);
+      _githubWorkflowController.text = nextSettings.githubWorkflow;
+    });
+    if (save) _persistSnapshot();
   }
 
   void _setTargets(String targets) {
-    _targetsController.text = targets;
     _updateSettings(_settings.copyWith(targets: targets));
+  }
+
+  void _setExecutionMode(ExecutionMode mode) {
+    _updateSettings(_settings.copyWith(executionMode: mode));
+  }
+
+  void _setRunnerProfile(String profile) {
+    _updateSettings(_settings.copyWith(runnerProfile: profile));
+  }
+
+  void _setBuildMode(String mode) {
+    _updateSettings(_settings.copyWith(buildMode: mode));
   }
 
   Future<void> _run(BuildAction action) async {
@@ -421,16 +636,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   }
 
   _CommandSpec _commandFor(BuildAction action) {
-    if (_settings.executionMode == ExecutionMode.github &&
-        action == BuildAction.build) {
-      return _githubDispatchCommand();
-    }
-    if (_settings.executionMode == ExecutionMode.github &&
-        action == BuildAction.dryRun) {
-      final dispatch = _githubDispatchCommand();
-      return _echoCommand(dispatch.display);
-    }
-
     final args = <String>[
       action.command,
       '-p',
@@ -447,17 +652,15 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       case BuildAction.matrix:
         args.addAll([
           '--runner-profile',
-          _settings.runnerProfile.value,
+          _settings.runnerProfile,
           '--pretty',
           ..._targetArgs,
         ]);
       case BuildAction.dryRun:
-        args.addAll(['--mode', _settings.buildMode, '--dry-run']);
-        if (_settings.skipUnsupported) args.add('--skip-unsupported');
+        args.addAll(_buildCommandArgs(dryRun: true));
         args.addAll(_targetArgs);
       case BuildAction.build:
-        args.addAll(['--mode', _settings.buildMode]);
-        if (_settings.skipUnsupported) args.add('--skip-unsupported');
+        args.addAll(_buildCommandArgs(dryRun: false));
         args.addAll(_targetArgs);
     }
 
@@ -479,56 +682,39 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     );
   }
 
-  _CommandSpec _githubDispatchCommand() {
-    final workflow = _settings.githubWorkflow.trim().isEmpty
-        ? 'shared-build.yml'
-        : _settings.githubWorkflow.trim();
-    final args = <String>[
-      'workflow',
-      'run',
-      workflow,
-      '-R',
-      _effectiveGitHubRepo(_settings),
-      '-f',
-      'targets=${_targetArgs.join(' ')}',
-      '-f',
-      'runner-profile=${_settings.runnerProfile.value}',
-      '-f',
-      'planner-runner-json=${_plannerRunnerJson(_settings.runnerProfile)}',
-      '-f',
-      'setup-buildroot-deps=${_settings.setupBuildrootDeps}',
-    ];
-    final buildrootDir = _settings.buildrootDir.trim();
-    if (buildrootDir.isNotEmpty) {
-      args.addAll(['-f', 'buildroot-dir=$buildrootDir']);
-    }
-    return _CommandSpec(
-      executable: 'gh',
-      args: args,
-      workingDirectory: _settings.repoRoot.trim().isEmpty
-          ? _settings.toolkitRoot
-          : _settings.repoRoot.trim(),
-      display: _displayCommand('gh', args),
-      validateExecutablePath: false,
-    );
-  }
+  List<String> _buildCommandArgs({required bool dryRun}) {
+    final args = <String>['--execution-mode', _settings.executionMode.value];
+    if (dryRun) args.add('--dry-run');
 
-  _CommandSpec _echoCommand(String line) {
-    if (Platform.isWindows) {
-      return _CommandSpec(
-        executable: 'cmd',
-        args: ['/c', 'echo', line],
-        workingDirectory: _settings.toolkitRoot,
-        display: line,
-        validateExecutablePath: false,
-      );
+    if (_settings.executionMode == ExecutionMode.github) {
+      args.addAll(['--runner-profile', _settings.runnerProfile]);
+      final repo = _effectiveGitHubRepo(_settings);
+      if (repo.isNotEmpty) args.addAll(['--github-repo', repo]);
+      final workflow = _settings.githubWorkflow.trim();
+      if (workflow.isNotEmpty) args.addAll(['--github-workflow', workflow]);
+      if (_settings.product == 'foundry') {
+        args.add(
+          _settings.setupBuildrootDeps
+              ? '--setup-buildroot-deps'
+              : '--no-setup-buildroot-deps',
+        );
+        final buildrootDir = _settings.buildrootDir.trim();
+        if (buildrootDir.isNotEmpty) {
+          args.addAll(['--buildroot-dir', buildrootDir]);
+        }
+      }
+      return args;
     }
-    return _CommandSpec(
-      executable: '/bin/sh',
-      args: ['-lc', 'printf "%s\\n" "\$1"', 'print-command', line],
-      workingDirectory: _settings.toolkitRoot,
-      display: line,
-    );
+
+    args.addAll(['--mode', _settings.buildMode]);
+    if (_settings.skipUnsupported) args.add('--skip-unsupported');
+    if (_settings.product == 'foundry') {
+      final buildrootDir = _settings.buildrootDir.trim();
+      if (buildrootDir.isNotEmpty) {
+        args.addAll(['--buildroot-dir', buildrootDir]);
+      }
+    }
+    return args;
   }
 
   List<String> get _targetArgs {
@@ -620,7 +806,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               ),
               ClStatusEntry(
                 label: 'runner',
-                value: _settings.runnerProfile.label,
+                value: _runnerProfileLabel(_settings.runnerProfile),
               ),
               ClStatusEntry(label: 'product', value: _settings.product),
               ClStatusEntry(label: 'targets', value: _settings.targets),
@@ -662,7 +848,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _fieldLabel('Run location'),
-            ClSegmented<ExecutionMode>(
+            _BuildSegmented<ExecutionMode>(
               value: _settings.executionMode,
               expand: true,
               options: const [
@@ -679,9 +865,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               ],
               onChanged: _isRunning
                   ? null
-                  : (value) => _updateSettings(
-                      _settings.copyWith(executionMode: value),
-                    ),
+                  : (value) => _setExecutionMode(value),
             ),
             const SizedBox(height: 14),
             _fieldLabel('Product'),
@@ -696,98 +880,80 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   ? null
                   : (value) {
                       if (value == null) return;
-                      _setProduct(value);
+                      unawaited(_setProduct(value));
                     },
             ),
             const SizedBox(height: 14),
             _fieldLabel('Targets or groups'),
-            TextField(
-              controller: _targetsController,
-              enabled: !_isRunning,
-              decoration: const InputDecoration(hintText: 'all, os, desktop'),
-              onChanged: (value) =>
-                  _updateSettings(_settings.copyWith(targets: value)),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final preset in _targetPresets)
-                  ClFilterPill(
-                    active: _settings.targets.trim() == preset,
-                    disabled: _isRunning,
-                    onTap: () => _setTargets(preset),
-                    label: preset,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _fieldLabel('Runner profile'),
-            ClSegmented<RunnerProfile>(
-              value: _settings.runnerProfile,
-              expand: true,
-              options: const [
-                ClSegmentOption(
-                  value: RunnerProfile.githubHosted,
-                  label: 'GitHub',
-                  icon: ClIcons.cloud,
-                ),
-                ClSegmentOption(
-                  value: RunnerProfile.selfHosted,
-                  label: 'Org runners',
-                  icon: ClIcons.server,
-                ),
+            DropdownButtonFormField<String>(
+              key: ValueKey(
+                'targets-${_settings.product}-${_settings.targets}-${_productDescriptor.targetChoices.join('|')}',
+              ),
+              initialValue:
+                  _productDescriptor.targetChoices.contains(_settings.targets)
+                  ? _settings.targets
+                  : _productDescriptor.targetChoices.first,
+              isExpanded: true,
+              items: [
+                for (final target in _productDescriptor.targetChoices)
+                  DropdownMenuItem(value: target, child: Text(target)),
               ],
               onChanged: _isRunning
                   ? null
-                  : (value) => _updateSettings(
-                      _settings.copyWith(runnerProfile: value),
-                    ),
+                  : (value) {
+                      if (value == null) return;
+                      _setTargets(value);
+                    },
             ),
-            if (_settings.executionMode == ExecutionMode.github) ...[
+            if (_isGitHubMode) ...[
+              const SizedBox(height: 14),
+              _fieldLabel('Runner profile'),
+              DropdownButtonFormField<String>(
+                key: ValueKey('runner-${_settings.runnerProfile}'),
+                initialValue: _settings.runnerProfile,
+                isExpanded: true,
+                items: [
+                  for (final profile in _availableRunnerProfiles)
+                    DropdownMenuItem(
+                      value: profile.value,
+                      child: Text(profile.label),
+                    ),
+                ],
+                onChanged: _isRunning
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        _setRunnerProfile(value);
+                      },
+              ),
               const SizedBox(height: 14),
               _buildGitHubOptions(),
             ],
-            const SizedBox(height: 14),
-            _fieldLabel('Build mode'),
-            ClSegmented<String>(
-              value: _settings.buildMode,
-              expand: true,
-              options: const [
-                ClSegmentOption(value: 'release', label: 'Release'),
-                ClSegmentOption(value: 'profile', label: 'Profile'),
-                ClSegmentOption(value: 'debug', label: 'Debug'),
-              ],
-              onChanged: _isRunning
-                  ? null
-                  : (value) =>
-                        _updateSettings(_settings.copyWith(buildMode: value)),
-            ),
-            const SizedBox(height: 14),
-            _fieldLabel('Repo root override'),
-            TextField(
-              controller: _repoRootController,
-              enabled: !_isRunning,
-              decoration: const InputDecoration(
-                hintText: 'leave empty for product config default',
+            if (!_isGitHubMode) ...[
+              const SizedBox(height: 14),
+              _fieldLabel('Build mode'),
+              _BuildSegmented<String>(
+                value: _settings.buildMode,
+                expand: true,
+                options: const [
+                  ClSegmentOption(value: 'release', label: 'Release'),
+                  ClSegmentOption(value: 'profile', label: 'Profile'),
+                  ClSegmentOption(value: 'debug', label: 'Debug'),
+                ],
+                onChanged: _isRunning ? null : _setBuildMode,
               ),
-              onChanged: (value) =>
-                  _updateSettings(_settings.copyWith(repoRoot: value)),
-            ),
-            if (_settings.executionMode == ExecutionMode.github)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: ClBanner(
-                  kind: ClBannerKind.info,
-                  title: 'GitHub dispatch',
-                  body:
-                      'Build sends workflow_dispatch to the selected repo. Dry Run previews the gh command.',
-                  detail: _settings.runnerProfile == RunnerProfile.selfHosted
-                      ? 'Planner: ["self-hosted","linux"]; matrix rows use org self-hosted OS labels.'
-                      : 'Planner: ubuntu-latest; matrix rows use GitHub-provided runners.',
+              const SizedBox(height: 14),
+              _fieldLabel('Repo root override'),
+              TextField(
+                controller: _repoRootController,
+                enabled: !_isRunning,
+                decoration: const InputDecoration(
+                  hintText: 'leave empty for product config default',
                 ),
+                onChanged: (value) =>
+                    _updateSettings(_settings.copyWith(repoRoot: value)),
               ),
+            ],
             const SizedBox(height: 14),
             _fieldLabel('Toolkit root'),
             TextField(
@@ -802,27 +968,29 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               ),
               onSubmitted: (_) => _applyToolkitRoot(),
             ),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: brand.borderSubtle),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: SwitchListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                title: Text(
-                  'Skip unsupported hosts',
-                  style: context.clBodySmall,
+            if (!_isGitHubMode) ...[
+              const SizedBox(height: 14),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: brand.borderSubtle),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                value: _settings.skipUnsupported,
-                onChanged: _isRunning
-                    ? null
-                    : (value) => _updateSettings(
-                        _settings.copyWith(skipUnsupported: value),
-                      ),
+                child: SwitchListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  title: Text(
+                    'Skip unsupported hosts',
+                    style: context.clBodySmall,
+                  ),
+                  value: _settings.skipUnsupported,
+                  onChanged: _isRunning
+                      ? null
+                      : (value) => _updateSettings(
+                          _settings.copyWith(skipUnsupported: value),
+                        ),
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -833,30 +1001,25 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   onPressed: _isRunning ? null : () => _run(BuildAction.plan),
                   child: const Text('Plan'),
                 ),
-                ClButton(
-                  icon: ClIcons.grid,
-                  kind: ClButtonKind.outlined,
-                  onPressed: _isRunning ? null : () => _run(BuildAction.matrix),
-                  child: const Text('Matrix'),
-                ),
+                if (_isGitHubMode)
+                  ClButton(
+                    icon: ClIcons.grid,
+                    kind: ClButtonKind.outlined,
+                    onPressed: _isRunning
+                        ? null
+                        : () => _run(BuildAction.matrix),
+                    child: const Text('Matrix'),
+                  ),
                 ClButton(
                   icon: ClIcons.terminal,
                   kind: ClButtonKind.outlined,
                   onPressed: _isRunning ? null : () => _run(BuildAction.dryRun),
-                  child: Text(
-                    _settings.executionMode == ExecutionMode.github
-                        ? 'Preview'
-                        : 'Dry Run',
-                  ),
+                  child: Text(_isGitHubMode ? 'Preview' : 'Dry Run'),
                 ),
                 ClButton(
                   icon: ClIcons.play,
                   onPressed: _isRunning ? null : () => _run(BuildAction.build),
-                  child: Text(
-                    _settings.executionMode == ExecutionMode.github
-                        ? 'Dispatch'
-                        : 'Build',
-                  ),
+                  child: Text(_isGitHubMode ? 'Dispatch' : 'Build'),
                 ),
                 if (_isRunning)
                   ClButton.destructive(
@@ -884,11 +1047,23 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ClBanner(
+          kind: ClBannerKind.info,
+          title: 'GitHub dispatch',
+          body:
+              'Preview uses the shared CLI dry run. Dispatch sends workflow_dispatch to the selected repo.',
+          detail: 'Runner profiles are loaded from build.toml.',
+        ),
+        const SizedBox(height: 12),
         _fieldLabel('GitHub repo'),
         TextField(
           controller: _githubRepoController,
           enabled: !_isRunning,
-          decoration: const InputDecoration(hintText: 'CepheusLabs/foundry'),
+          decoration: InputDecoration(
+            hintText: _productDescriptor.githubRepo.isEmpty
+                ? 'owner/repository'
+                : _productDescriptor.githubRepo,
+          ),
           onChanged: (value) =>
               _updateSettings(_settings.copyWith(githubRepo: value)),
         ),
@@ -901,39 +1076,41 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
           onChanged: (value) =>
               _updateSettings(_settings.copyWith(githubWorkflow: value)),
         ),
-        const SizedBox(height: 12),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: brand.borderSubtle),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: SwitchListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            title: Text('Install Buildroot deps', style: context.clBodySmall),
-            subtitle: Text(
-              'Turn off for prepared org self-hosted images.',
-              style: context.dataTiny,
+        if (_isFoundry) ...[
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: brand.borderSubtle),
+              borderRadius: BorderRadius.circular(6),
             ),
-            value: _settings.setupBuildrootDeps,
-            onChanged: _isRunning
-                ? null
-                : (value) => _updateSettings(
-                    _settings.copyWith(setupBuildrootDeps: value),
-                  ),
+            child: SwitchListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+              title: Text('Install Buildroot deps', style: context.clBodySmall),
+              subtitle: Text(
+                'Turn off for prepared org self-hosted images.',
+                style: context.dataTiny,
+              ),
+              value: _settings.setupBuildrootDeps,
+              onChanged: _isRunning
+                  ? null
+                  : (value) => _updateSettings(
+                      _settings.copyWith(setupBuildrootDeps: value),
+                    ),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _fieldLabel('Buildroot checkout'),
-        TextField(
-          controller: _buildrootDirController,
-          enabled: !_isRunning,
-          decoration: const InputDecoration(
-            hintText: 'optional, e.g. /opt/buildroot',
+          const SizedBox(height: 12),
+          _fieldLabel('Buildroot checkout'),
+          TextField(
+            controller: _buildrootDirController,
+            enabled: !_isRunning,
+            decoration: const InputDecoration(
+              hintText: 'optional, e.g. /opt/buildroot',
+            ),
+            onChanged: (value) =>
+                _updateSettings(_settings.copyWith(buildrootDir: value)),
           ),
-          onChanged: (value) =>
-              _updateSettings(_settings.copyWith(buildrootDir: value)),
-        ),
+        ],
       ],
     );
   }
@@ -1037,7 +1214,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   meta: ClListRowMeta(
                     name: '${entry.product} · ${entry.action.label}',
                     sub:
-                        '${entry.executionMode.label} · ${entry.runnerProfile.label} · ${entry.targets} · ${_timeLabel(entry.startedAt)}',
+                        '${entry.executionMode.label} · ${_runnerProfileLabel(entry.runnerProfile)} · ${entry.targets} · ${_timeLabel(entry.startedAt)}',
                   ),
                   trailing: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1059,6 +1236,99 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: ClTechLabel(label),
+    );
+  }
+}
+
+class _BuildSegmented<T> extends StatelessWidget {
+  const _BuildSegmented({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    this.expand = false,
+  });
+
+  final T value;
+  final List<ClSegmentOption<T>> options;
+  final ValueChanged<T>? onChanged;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brandColors;
+    Widget segment(ClSegmentOption<T> option) {
+      final selected = option.value == value;
+      final fg = selected ? brand.onPrimary : brand.ink2;
+      final bg = selected ? brand.primary : Colors.transparent;
+      final border = selected ? brand.primary : brand.borderSubtle;
+      final tile = Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          onTap: onChanged == null ? null : () => onChanged!(option.value),
+          borderRadius: BorderRadius.circular(6),
+          mouseCursor: onChanged == null
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.click,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            height: 30,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (option.icon != null) ...[
+                  Icon(option.icon, size: 14, color: fg),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    option.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Geist',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final wrapped = option.tooltip == null
+          ? tile
+          : Tooltip(message: option.tooltip!, child: tile);
+      return expand ? Expanded(child: wrapped) : wrapped;
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: brand.bgAlt,
+        border: Border.all(color: brand.borderSubtle),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            for (var index = 0; index < options.length; index++) ...[
+              if (index > 0) const SizedBox(width: 2),
+              segment(options[index]),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1199,32 +1469,65 @@ String _basename(String path) {
   return pieces.isEmpty ? path : pieces.last;
 }
 
+String _stripTomlComment(String line) {
+  var inString = false;
+  var escaped = false;
+  for (var index = 0; index < line.length; index++) {
+    final char = line[index];
+    if (char == r'\' && inString && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (char == '"' && !escaped) {
+      inString = !inString;
+    }
+    if (char == '#' && !inString) {
+      return line.substring(0, index);
+    }
+    escaped = false;
+  }
+  return line;
+}
+
+String? _tomlSection(String line) {
+  final match = RegExp(r'^\[([^\]]+)\]$').firstMatch(line);
+  return match?.group(1);
+}
+
+String? _targetSectionName(String section) {
+  const prefix = 'targets.';
+  if (!section.startsWith(prefix)) return null;
+  return section.substring(prefix.length);
+}
+
+String? _tomlAssignmentName(String line) {
+  return RegExp(r'^([A-Za-z0-9_-]+)\s*=').firstMatch(line)?.group(1);
+}
+
+String? _tomlStringValue(String line, String key) {
+  final escapedKey = RegExp.escape(key);
+  final match = RegExp('^$escapedKey\\s*=\\s*"([^"]*)"').firstMatch(line);
+  return match?.group(1);
+}
+
+List<String> _uniqueStrings(Iterable<String> values) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final value in values) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || seen.contains(normalized)) continue;
+    seen.add(normalized);
+    result.add(normalized);
+  }
+  return result;
+}
+
 String _displayCommand(String executable, List<String> args) {
   return [executable, ...args].map(_quoteForDisplay).join(' ');
 }
 
 String _effectiveGitHubRepo(BuildSettings settings) {
-  final configured = settings.githubRepo.trim();
-  if (configured.isNotEmpty) return configured;
-  return _defaultGitHubRepoForProduct(settings.product);
-}
-
-String _defaultGitHubRepoForProduct(String product) {
-  return switch (product) {
-    'deckhand' => 'CepheusLabs/deckhand-app',
-    'colorwake-studio' => 'CepheusLabs/colorwake-studio',
-    'printdeck' => 'CepheusLabs/printdeck',
-    'anvil' => 'CepheusLabs/anvil',
-    'foundry' => 'CepheusLabs/foundry',
-    _ => 'CepheusLabs/$product',
-  };
-}
-
-String _plannerRunnerJson(RunnerProfile profile) {
-  return switch (profile) {
-    RunnerProfile.githubHosted => '"ubuntu-latest"',
-    RunnerProfile.selfHosted => '["self-hosted","linux"]',
-  };
+  return settings.githubRepo.trim();
 }
 
 String _quoteForDisplay(String value) {

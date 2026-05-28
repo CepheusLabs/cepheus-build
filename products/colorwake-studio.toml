@@ -7,6 +7,9 @@ app_dir = "apps/colorwake_studio"
 [version]
 env_prefix = "COLORWAKE"
 
+[github]
+repository = "CepheusLabs/colorwake-studio"
+
 [groups]
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["windows-msix"]

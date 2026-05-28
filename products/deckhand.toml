@@ -7,6 +7,9 @@ app_dir = "app"
 [version]
 env_prefix = "DECKHAND"
 
+[github]
+repository = "CepheusLabs/deckhand-app"
+
 [groups]
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["macos-dmg", "windows-installer", "linux-appimage"]

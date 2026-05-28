@@ -1,0 +1,16 @@
+[github]
+default_workflow = "shared-build.yml"
+
+[github.runner_profiles.github-hosted]
+label = "GitHub-provided"
+planner = "ubuntu-latest"
+linux = "ubuntu-latest"
+macos = "macos-latest"
+windows = "windows-latest"
+
+[github.runner_profiles.self-hosted]
+label = "Org self-hosted"
+planner = ["self-hosted", "linux"]
+linux = ["self-hosted", "linux"]
+macos = ["self-hosted", "macos"]
+windows = ["self-hosted", "windows"]

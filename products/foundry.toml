@@ -7,6 +7,9 @@ app_dir = "."
 [version]
 env_prefix = "FOUNDRY"
 
+[github]
+repository = "CepheusLabs/foundry"
+
 [groups]
 quality = ["fmt", "clippy", "test"]
 host = ["host-linux", "host-macos", "host-windows"]

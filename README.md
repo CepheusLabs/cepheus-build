@@ -28,6 +28,7 @@ From a checkout beside the app repos:
 ./bin/cepheus-build build -p colorwake-studio macos
 ./bin/cepheus-build artifacts -p deckhand desktop_packages --copy-to dist/deckhand
 ./bin/cepheus-build plan -p foundry os
+./bin/cepheus-build local-sweep printdeck deckhand --targets desktop --dry-run
 ```
 
 ## GUI
@@ -39,8 +40,9 @@ cd app
 flutter run -d macos
 ```
 
-It can run local builds directly or dispatch GitHub workflows with
-GitHub-provided or org self-hosted runners. Local run history is stored in
+It can run local builds directly or dispatch GitHub workflows with runner
+profiles loaded from `build.toml`. Product repositories and workflow names come
+from each `products/*.toml` file. Local run history is stored in
 `history/build-history.json` so the team can commit it when useful.
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
@@ -58,10 +60,10 @@ Cepheus Build supports the same product configs in three places:
 
 - Local builds: run `shared/cepheus-build/bin/cepheus-build build ...` from a
   developer machine or release workstation.
-- GitHub-hosted runners: use the reusable workflow with
-  `runner-profile: github-hosted`.
-- Self-hosted GitHub runners: use the reusable workflow with
-  `runner-profile: self-hosted` and a self-hosted planner runner.
+- GitHub-hosted runners: use the reusable workflow with the
+  `github-hosted` runner profile from `build.toml`.
+- Self-hosted GitHub runners: use the reusable workflow with the `self-hosted`
+  runner profile from `build.toml`; those labels are org-level by default.
 
 You can inspect the generated CI matrix without running a build:
 

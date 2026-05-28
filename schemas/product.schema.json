@@ -29,6 +29,14 @@
       "type": "object",
       "additionalProperties": true
     },
+    "github": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string" },
+        "workflow": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "groups": {
       "type": "object",
       "additionalProperties": {

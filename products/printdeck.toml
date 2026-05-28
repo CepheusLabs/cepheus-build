@@ -7,6 +7,9 @@ app_dir = "frontend"
 [version]
 env_prefix = "PRINTDECK"
 
+[github]
+repository = "CepheusLabs/printdeck"
+
 [groups]
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["macos-dmg", "windows-msix", "linux-deb", "linux-appimage"]
