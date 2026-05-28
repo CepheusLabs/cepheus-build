@@ -10,8 +10,6 @@ import 'build_models.dart';
 const _maxHistoryEntries = 250;
 const _maxStoredOutputChars = 160000;
 
-enum _ConsoleView { console, history }
-
 class _ProductDescriptor {
   const _ProductDescriptor({
     required this.product,
@@ -126,7 +124,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   String? _message;
   bool _loading = true;
   bool _showLiveOutput = true;
-  _ConsoleView _view = _ConsoleView.console;
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
@@ -158,23 +155,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       if (choice.value == profile) return choice.label;
     }
     return profile;
-  }
-
-  void _showHistoryTab() {
-    setState(() {
-      if (_selectedHistory == null && _history.isNotEmpty) {
-        _selectedHistory = _history.first;
-      }
-      _view = _ConsoleView.history;
-      _showLiveOutput = false;
-    });
-  }
-
-  void _showConsoleTab() {
-    setState(() {
-      _view = _ConsoleView.console;
-      _showLiveOutput = true;
-    });
   }
 
   File get _historyFile =>
@@ -620,7 +600,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       _runningAction = action;
       _startedAt = startedAt;
       _liveOutput = buffer.toString();
-      _view = _ConsoleView.console;
       _showLiveOutput = true;
       _message = null;
     });
@@ -743,6 +722,11 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     switch (action) {
       case BuildAction.plan:
         args.addAll(_targetArgs);
+      case BuildAction.doctor:
+        args.addAll(_targetArgs);
+      case BuildAction.installDeps:
+        if (_settings.skipUnsupported) args.add('--skip-unsupported');
+        args.addAll(_targetArgs);
       case BuildAction.matrix:
         args.addAll([
           '--runner-profile',
@@ -846,20 +830,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
           ClCommandBar(
             title: 'Cepheus Build',
             subtitle: 'Shared builds, local history',
-            nav: [
-              ClNavPill(
-                label: 'Console',
-                selected: _view == _ConsoleView.console,
-                icon: ClIcons.terminal,
-                onPressed: _showConsoleTab,
-              ),
-              ClNavPill(
-                label: 'History',
-                selected: _view == _ConsoleView.history,
-                icon: ClIcons.list,
-                onPressed: _showHistoryTab,
-              ),
-            ],
             actions: [
               ClThemeToggle(
                 value: widget.themeMode,
@@ -872,9 +842,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                 ? const Center(child: ClLoadingState(label: 'Loading console'))
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      return _view == _ConsoleView.history
-                          ? _buildHistoryWorkspace(constraints)
-                          : _buildConsoleWorkspace(constraints);
+                      return _buildConsoleWorkspace(constraints);
                     },
                   ),
           ),
@@ -1084,6 +1052,24 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   onPressed: _isRunning ? null : () => _run(BuildAction.plan),
                   child: const Text('Plan'),
                 ),
+                if (!_isGitHubMode) ...[
+                  ClButton(
+                    icon: ClIcons.check,
+                    kind: ClButtonKind.outlined,
+                    onPressed: _isRunning
+                        ? null
+                        : () => _run(BuildAction.doctor),
+                    child: const Text('Check Deps'),
+                  ),
+                  ClButton(
+                    icon: ClIcons.download,
+                    kind: ClButtonKind.outlined,
+                    onPressed: _isRunning
+                        ? null
+                        : () => _run(BuildAction.installDeps),
+                    child: const Text('Install Deps'),
+                  ),
+                ],
                 if (_isGitHubMode)
                   ClButton(
                     icon: ClIcons.grid,
@@ -1152,32 +1138,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
           Expanded(child: _buildLogPanel()),
           const SizedBox(width: 12),
           SizedBox(width: 360, child: _buildHistoryPanel()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryWorkspace(BoxConstraints constraints) {
-    if (constraints.maxWidth < 980) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            SizedBox(height: 440, child: _buildHistoryPanel()),
-            const SizedBox(height: 12),
-            SizedBox(height: 520, child: _buildLogPanel()),
-          ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: 460, child: _buildHistoryPanel()),
-          const SizedBox(width: 12),
-          Expanded(child: _buildLogPanel()),
         ],
       ),
     );

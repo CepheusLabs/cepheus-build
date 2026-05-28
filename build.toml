@@ -14,3 +14,40 @@ planner = ["self-hosted", "linux"]
 linux = ["self-hosted", "linux"]
 macos = ["self-hosted", "macos"]
 windows = ["self-hosted", "windows"]
+
+[tools.appimagetool]
+hint = "install appimagetool from the AppImageKit releases"
+
+[tools.cargo]
+hint = "install Rust with rustup or your package manager"
+
+[tools.cargo-ndk]
+hint = "install with: cargo install cargo-ndk --locked"
+install = ["cargo install cargo-ndk --locked"]
+
+[tools.create-dmg]
+hint = "install with: brew install create-dmg"
+install = { macos = ["brew install create-dmg"] }
+
+[tools.flutter]
+hint = "install Flutter and make sure flutter is on PATH"
+
+[tools.flutter_rust_bridge_codegen]
+hint = "install with: cargo install flutter_rust_bridge_codegen --locked"
+install = ["cargo install flutter_rust_bridge_codegen --locked"]
+
+[tools.go]
+hint = "install Go from go.dev or your package manager"
+
+[tools.iscc]
+hint = "install Inno Setup and make sure iscc is on PATH"
+
+[tools.pwsh]
+hint = "install PowerShell and make sure pwsh is on PATH"
+
+[tools.rustup]
+hint = "install Rust with rustup"
+
+[tools.wasm-pack]
+hint = "install with: cargo install wasm-pack --locked"
+install = ["cargo install wasm-pack --locked"]

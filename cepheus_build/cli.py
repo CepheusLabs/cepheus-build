@@ -295,6 +295,42 @@ def ensure_host(target_name: str, target: dict[str, Any], skip_unsupported: bool
     raise BuildError(message)
 
 
+def tool_status(tool: str) -> tuple[bool, str]:
+    if tool in VIRTUAL_TOOLS:
+        return True, "managed by product command/workflow setup"
+    path = shutil.which(tool)
+    if path:
+        return True, path
+    hint = str(tool_config(tool).get("hint") or "")
+    detail = "missing"
+    if hint:
+        detail = f"{detail} ({hint})"
+    return False, detail
+
+
+def tool_install_commands(tool: str) -> list[str]:
+    install = tool_config(tool).get("install")
+    if isinstance(install, dict):
+        host = current_host()
+        return string_list(install.get(host) or install.get("default"))
+    return string_list(install)
+
+
+def require_target_tools(config: ProductConfig, target_name: str, target: dict[str, Any]) -> None:
+    tools = set(config.data.get("tools", {}).get("required", []) or [])
+    tools.update(target.get("tools", []) or [])
+    missing: list[str] = []
+    for tool in sorted(tools):
+        ok, detail = tool_status(tool)
+        if not ok:
+            missing.append(f"{tool}: {detail}")
+    if missing:
+        details = "\n  ".join(missing)
+        raise BuildError(
+            f"Missing required tools for {config.slug} target '{target_name}':\n  {details}"
+        )
+
+
 def dart_define_args(config: ProductConfig, target: dict[str, Any], env: dict[str, str]) -> list[str]:
     values: dict[str, Any] = {}
     values.update(config.flutter.get("dart_defines", {}) or {})
@@ -365,10 +401,13 @@ def run_target(
     extra_args: list[str],
     skip_unsupported: bool,
     extra_env: dict[str, str] | None = None,
+    check_tools: bool = True,
 ) -> None:
     target = config.target(target_name)
     if not ensure_host(target_name, target, skip_unsupported):
         return
+    if check_tools and not dry_run:
+        require_target_tools(config, target_name, target)
 
     env = build_env(config, stamp, extra_env)
     print(f"\n==> {config.display_name}: {target_name} ({stamp.full})")
@@ -426,6 +465,25 @@ def normalize_hosts(value: Any) -> list[str]:
 
 def github_config() -> dict[str, Any]:
     return load_tool_config().get("github", {})
+
+
+def tools_config() -> dict[str, Any]:
+    return load_tool_config().get("tools", {})
+
+
+def tool_config(tool: str) -> dict[str, Any]:
+    config = tools_config().get(tool, {})
+    return config if isinstance(config, dict) else {}
+
+
+def string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return []
 
 
 def runner_profile_names() -> list[str]:
@@ -695,14 +753,54 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if not ensure_host(target_name, target, skip_unsupported=True):
             continue
     for tool in sorted(tools):
-        if tool in VIRTUAL_TOOLS:
-            print(f"{tool}: managed by product command/workflow setup")
-            continue
-        path = shutil.which(tool)
-        print(f"{tool}: {path or 'missing'}")
-        if not path:
+        ok, detail = tool_status(tool)
+        print(f"{tool}: {detail}")
+        if not ok:
             missing = True
     return 1 if missing else 0
+
+
+def cmd_install_deps(args: argparse.Namespace) -> int:
+    config = load_product(args)
+    targets = config.expand_targets(args.targets)
+    tools = set(config.data.get("tools", {}).get("required", []) or [])
+    for target_name in targets:
+        target = config.target(target_name)
+        if not ensure_host(target_name, target, skip_unsupported=args.skip_unsupported):
+            continue
+        tools.update(target.get("tools", []) or [])
+
+    if not tools:
+        print("No tools declared for selected targets.")
+        return 0
+
+    missing_manual: list[str] = []
+    for tool in sorted(tools):
+        ok, detail = tool_status(tool)
+        if ok and args.skip_existing:
+            print(f"ok: {tool}: {detail}")
+            continue
+
+        commands = tool_install_commands(tool)
+        if not commands:
+            if ok:
+                print(f"manual: {tool}: no installer configured; already present at {detail}")
+            else:
+                print(f"manual: {tool}: {detail}")
+                missing_manual.append(tool)
+            continue
+
+        print(f"install: {tool}")
+        for command in commands:
+            run_command(command, TOOL_ROOT, dict(os.environ), args.dry_run)
+
+    if missing_manual:
+        raise BuildError(
+            "No installer configured for missing tools: "
+            + ", ".join(missing_manual)
+            + ". Add [tools.<name>].install to build.toml or install them manually."
+        )
+    return 0
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -723,6 +821,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             extra_args=args.flutter_arg or [],
             skip_unsupported=args.skip_unsupported,
             extra_env=extra_env,
+            check_tools=args.check_tools,
         )
     return 0
 
@@ -823,6 +922,7 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
                     extra_args=args.flutter_arg or [],
                     skip_unsupported=args.skip_unsupported,
                     extra_env=extra_env,
+                    check_tools=args.check_tools,
                 )
         except Exception as exc:
             failures.append((product_name, str(exc)))
@@ -864,6 +964,12 @@ def add_local_build_args(parser: argparse.ArgumentParser) -> None:
         "--buildroot-dir",
         default="",
         help="Optional Buildroot checkout path for Foundry targets or workflow dispatch.",
+    )
+    parser.add_argument(
+        "--check-tools",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Check target tools before local command execution. Defaults to true.",
     )
 
 
@@ -911,6 +1017,24 @@ def build_parser() -> argparse.ArgumentParser:
     add_product_args(doctor)
     doctor.add_argument("targets", nargs="*", help="Targets or groups. Defaults to desktop.")
     doctor.set_defaults(func=cmd_doctor)
+
+    install_deps = sub.add_parser("install-deps", help="Install configured local dependencies for product targets.")
+    add_product_args(install_deps)
+    install_deps.add_argument("targets", nargs="*", help="Targets or groups. Defaults to desktop.")
+    install_deps.add_argument("--dry-run", action="store_true", help="Print install commands without running them.")
+    install_deps.add_argument(
+        "--skip-existing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip tools that are already present. Defaults to true.",
+    )
+    install_deps.add_argument(
+        "--skip-unsupported",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip targets that need another host OS. Defaults to true.",
+    )
+    install_deps.set_defaults(func=cmd_install_deps)
 
     build = sub.add_parser("build", help="Build product targets.")
     add_product_args(build)

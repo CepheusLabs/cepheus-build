@@ -2,6 +2,8 @@ import 'dart:convert';
 
 enum BuildAction {
   plan('Plan', 'plan'),
+  doctor('Check Deps', 'doctor'),
+  installDeps('Install Deps', 'install-deps'),
   dryRun('Dry Run', 'build'),
   build('Build', 'build'),
   matrix('Matrix', 'ci-matrix'),
