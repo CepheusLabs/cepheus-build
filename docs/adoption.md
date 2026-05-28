@@ -29,7 +29,8 @@ shared/cepheus-build/bin/cepheus-build build -p deckhand --repo-root "$PWD" wind
 
 ## GitHub-Hosted Runners
 
-Add a thin workflow in the app repo:
+GitHub-hosted runners are opt-in. Add a thin workflow in the app repo and set
+both the build profile and planning runner explicitly:
 
 ```yaml
 name: app-build
@@ -45,6 +46,7 @@ jobs:
       product: printdeck
       toolkit-ref: main
       runner-profile: github-hosted
+      planner-runner-json: '"ubuntu-latest"'
       targets: all
 ```
 
@@ -62,9 +64,8 @@ The shared workflow generates this kind of matrix automatically:
 
 ## Self-Hosted GitHub Runners
 
-Use `runner-profile: self-hosted`. The planning job also needs a runner, so
-point it at a Linux self-hosted runner if the org should avoid
-GitHub-provided minutes entirely:
+Use `runner-profile: self-hosted`. This is the default for Cepheus Build. The
+planning job also needs a runner, so point it at a Linux self-hosted runner:
 
 ```yaml
 jobs:

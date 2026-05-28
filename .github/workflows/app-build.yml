@@ -25,12 +25,12 @@ on:
       runner-profile:
         description: github-hosted or self-hosted. Ignored when matrix-json is set.
         required: false
-        default: github-hosted
+        default: self-hosted
         type: string
       planner-runner-json:
         description: JSON runs-on value for the planning job. Use '["self-hosted","linux"]' for self-hosted-only orgs.
         required: false
-        default: '"ubuntu-latest"'
+        default: '["self-hosted","linux"]'
         type: string
       setup-flutter:
         description: Install Flutter with subosito/flutter-action before building.

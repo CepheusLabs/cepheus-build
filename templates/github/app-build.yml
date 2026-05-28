@@ -10,5 +10,6 @@ jobs:
     with:
       product: printdeck
       toolkit-ref: main
-      runner-profile: github-hosted
+      runner-profile: self-hosted
+      planner-runner-json: '["self-hosted","linux"]'
       targets: all
