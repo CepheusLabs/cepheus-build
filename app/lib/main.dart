@@ -10,6 +10,8 @@ import 'build_models.dart';
 const _maxHistoryEntries = 250;
 const _maxStoredOutputChars = 160000;
 
+enum _ConsoleView { console, history }
+
 class _ProductDescriptor {
   const _ProductDescriptor({
     required this.product,
@@ -124,6 +126,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   String? _message;
   bool _loading = true;
   bool _showLiveOutput = true;
+  _ConsoleView _view = _ConsoleView.console;
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
@@ -162,7 +165,15 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       if (_selectedHistory == null && _history.isNotEmpty) {
         _selectedHistory = _history.first;
       }
+      _view = _ConsoleView.history;
       _showLiveOutput = false;
+    });
+  }
+
+  void _showConsoleTab() {
+    setState(() {
+      _view = _ConsoleView.console;
+      _showLiveOutput = true;
     });
   }
 
@@ -609,6 +620,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       _runningAction = action;
       _startedAt = startedAt;
       _liveOutput = buffer.toString();
+      _view = _ConsoleView.console;
       _showLiveOutput = true;
       _message = null;
     });
@@ -837,13 +849,13 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
             nav: [
               ClNavPill(
                 label: 'Console',
-                selected: _showLiveOutput,
+                selected: _view == _ConsoleView.console,
                 icon: ClIcons.terminal,
-                onPressed: () => setState(() => _showLiveOutput = true),
+                onPressed: _showConsoleTab,
               ),
               ClNavPill(
                 label: 'History',
-                selected: !_showLiveOutput,
+                selected: _view == _ConsoleView.history,
                 icon: ClIcons.list,
                 onPressed: _showHistoryTab,
               ),
@@ -860,36 +872,9 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                 ? const Center(child: ClLoadingState(label: 'Loading console'))
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      if (constraints.maxWidth < 980) {
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            children: [
-                              _buildControlsPanel(),
-                              const SizedBox(height: 12),
-                              SizedBox(height: 440, child: _buildLogPanel()),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: 420,
-                                child: _buildHistoryPanel(),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(width: 330, child: _buildControlsPanel()),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildLogPanel()),
-                            const SizedBox(width: 12),
-                            SizedBox(width: 360, child: _buildHistoryPanel()),
-                          ],
-                        ),
-                      );
+                      return _view == _ConsoleView.history
+                          ? _buildHistoryWorkspace(constraints)
+                          : _buildConsoleWorkspace(constraints);
                     },
                   ),
           ),
@@ -1138,6 +1123,62 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildConsoleWorkspace(BoxConstraints constraints) {
+    if (constraints.maxWidth < 980) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            _buildControlsPanel(),
+            const SizedBox(height: 12),
+            SizedBox(height: 440, child: _buildLogPanel()),
+            const SizedBox(height: 12),
+            SizedBox(height: 420, child: _buildHistoryPanel()),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 330, child: _buildControlsPanel()),
+          const SizedBox(width: 12),
+          Expanded(child: _buildLogPanel()),
+          const SizedBox(width: 12),
+          SizedBox(width: 360, child: _buildHistoryPanel()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryWorkspace(BoxConstraints constraints) {
+    if (constraints.maxWidth < 980) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            SizedBox(height: 440, child: _buildHistoryPanel()),
+            const SizedBox(height: 12),
+            SizedBox(height: 520, child: _buildLogPanel()),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 460, child: _buildHistoryPanel()),
+          const SizedBox(width: 12),
+          Expanded(child: _buildLogPanel()),
+        ],
       ),
     );
   }
