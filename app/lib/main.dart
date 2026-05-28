@@ -14,18 +14,40 @@ class _ProductDescriptor {
   const _ProductDescriptor({
     required this.product,
     required this.targetChoices,
+    required this.storeChoices,
     this.githubRepo = '',
     this.githubWorkflow = '',
   });
 
   factory _ProductDescriptor.empty(String product) {
-    return _ProductDescriptor(product: product, targetChoices: const ['all']);
+    return _ProductDescriptor(
+      product: product,
+      targetChoices: const ['all'],
+      storeChoices: const [],
+    );
   }
 
   final String product;
   final List<String> targetChoices;
+  final List<_StoreDescriptor> storeChoices;
   final String githubRepo;
   final String githubWorkflow;
+}
+
+class _StoreDescriptor {
+  const _StoreDescriptor({
+    required this.name,
+    required this.enabled,
+    required this.hosts,
+    required this.requiredEnv,
+  });
+
+  final String name;
+  final bool enabled;
+  final List<String> hosts;
+  final List<String> requiredEnv;
+
+  String get label => enabled ? name : '$name (disabled)';
 }
 
 class _RunnerProfileChoice {
@@ -106,6 +128,12 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
   bool get _isFoundry => _settings.product == 'foundry';
+  _StoreDescriptor? get _selectedStore {
+    for (final store in _productDescriptor.storeChoices) {
+      if (store.name == _settings.store) return store;
+    }
+    return null;
+  }
 
   List<_RunnerProfileChoice> get _availableRunnerProfiles {
     if (_runnerProfiles.any(
@@ -127,6 +155,15 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       if (choice.value == profile) return choice.label;
     }
     return profile;
+  }
+
+  void _showHistoryTab() {
+    setState(() {
+      if (_selectedHistory == null && _history.isNotEmpty) {
+        _selectedHistory = _history.first;
+      }
+      _showLiveOutput = false;
+    });
   }
 
   File get _historyFile =>
@@ -276,9 +313,31 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
     final groups = <String>[];
     final targets = <String>[];
+    final stores = <_StoreDescriptor>[];
     var githubRepo = '';
     var githubWorkflow = '';
     var section = '';
+    String? currentStore;
+    var storeEnabled = true;
+    var storeHosts = <String>[];
+    var storeRequiredEnv = <String>[];
+
+    void flushStore() {
+      final name = currentStore;
+      if (name == null) return;
+      stores.add(
+        _StoreDescriptor(
+          name: name,
+          enabled: storeEnabled,
+          hosts: storeHosts,
+          requiredEnv: storeRequiredEnv,
+        ),
+      );
+      currentStore = null;
+      storeEnabled = true;
+      storeHosts = <String>[];
+      storeRequiredEnv = <String>[];
+    }
 
     for (final rawLine in await file.readAsLines()) {
       final line = _stripTomlComment(rawLine).trim();
@@ -286,11 +345,13 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
       final sectionName = _tomlSection(line);
       if (sectionName != null) {
+        flushStore();
         section = sectionName;
         final targetName = _targetSectionName(sectionName);
         if (targetName != null && !targets.contains(targetName)) {
           targets.add(targetName);
         }
+        currentStore = _storeSectionName(sectionName);
         continue;
       }
 
@@ -302,8 +363,14 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       } else if (section == 'github') {
         githubRepo = _tomlStringValue(line, 'repository') ?? githubRepo;
         githubWorkflow = _tomlStringValue(line, 'workflow') ?? githubWorkflow;
+      } else if (currentStore != null) {
+        storeEnabled = _tomlBoolValue(line, 'enabled') ?? storeEnabled;
+        storeHosts = _tomlArrayValue(line, 'hosts') ?? storeHosts;
+        storeRequiredEnv =
+            _tomlArrayValue(line, 'required_env') ?? storeRequiredEnv;
       }
     }
+    flushStore();
 
     final choices = _uniqueStrings([
       ...groups,
@@ -313,6 +380,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     return _ProductDescriptor(
       product: product,
       targetChoices: choices,
+      storeChoices: stores,
       githubRepo: githubRepo,
       githubWorkflow: githubWorkflow,
     );
@@ -380,10 +448,19 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     if (githubWorkflow.trim().isEmpty) {
       githubWorkflow = descriptor.githubWorkflow;
     }
+    final stores = descriptor.storeChoices;
+    var store = settings.store.trim();
+    if (stores.isEmpty) {
+      store = '';
+    } else if (!stores.any((choice) => choice.name == store)) {
+      final enabledStores = stores.where((choice) => choice.enabled);
+      store = (enabledStores.isEmpty ? stores.first : enabledStores.first).name;
+    }
     return settings.copyWith(
       targets: targets,
       githubRepo: githubRepo,
       githubWorkflow: githubWorkflow,
+      store: store,
     );
   }
 
@@ -505,6 +582,10 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     _updateSettings(_settings.copyWith(buildMode: mode));
   }
 
+  void _setStore(String store) {
+    _updateSettings(_settings.copyWith(store: store));
+  }
+
   Future<void> _run(BuildAction action) async {
     if (_isRunning) return;
 
@@ -574,6 +655,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         buildMode: _settings.buildMode,
         repoRoot: _settings.repoRoot,
         githubRepo: _effectiveGitHubRepo(_settings),
+        store: _settings.store,
         command: command.display,
         startedAt: startedAt,
         durationMs: duration.inMilliseconds,
@@ -662,6 +744,19 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       case BuildAction.build:
         args.addAll(_buildCommandArgs(dryRun: false));
         args.addAll(_targetArgs);
+      case BuildAction.deployPreview:
+        if (_settings.store.trim().isEmpty) {
+          args.add('__missing_store__');
+        } else {
+          args.add(_settings.store.trim());
+        }
+        args.add('--dry-run');
+      case BuildAction.deploy:
+        if (_settings.store.trim().isEmpty) {
+          args.add('__missing_store__');
+        } else {
+          args.add(_settings.store.trim());
+        }
     }
 
     final script = _joinPath(_settings.toolkitRoot, 'bin', 'cepheus-build');
@@ -742,14 +837,15 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
             nav: [
               ClNavPill(
                 label: 'Console',
-                selected: true,
+                selected: _showLiveOutput,
                 icon: ClIcons.terminal,
-                onPressed: () {},
+                onPressed: () => setState(() => _showLiveOutput = true),
               ),
               ClNavPill(
                 label: 'History',
+                selected: !_showLiveOutput,
                 icon: ClIcons.list,
-                onPressed: () => setState(() => _showLiveOutput = false),
+                onPressed: _showHistoryTab,
               ),
             ],
             actions: [
@@ -810,6 +906,8 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               ),
               ClStatusEntry(label: 'product', value: _settings.product),
               ClStatusEntry(label: 'targets', value: _settings.targets),
+              if (_settings.store.isNotEmpty)
+                ClStatusEntry(label: 'store', value: _settings.store),
               ClStatusEntry(label: 'history', value: _historyFile.path),
               if (selected != null)
                 ClStatusEntry(label: 'selected', value: selected.id),
@@ -1030,6 +1128,8 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               ],
             ),
             const SizedBox(height: 16),
+            _buildDeployControls(),
+            const SizedBox(height: 16),
             ClBanner(
               kind: ClBannerKind.info,
               title: 'History file',
@@ -1115,13 +1215,95 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     );
   }
 
+  Widget _buildDeployControls() {
+    final stores = _productDescriptor.storeChoices;
+    final selectedStore = _selectedStore;
+    final hasStores = stores.isNotEmpty;
+    final canDeploy =
+        hasStores &&
+        selectedStore != null &&
+        selectedStore.enabled &&
+        !_isRunning;
+    final requiredEnv = selectedStore?.requiredEnv ?? const <String>[];
+    final hosts = selectedStore?.hosts ?? const <String>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _fieldLabel('Store deploy'),
+        if (!hasStores)
+          const ClBanner(
+            kind: ClBannerKind.info,
+            title: 'No store lanes',
+            body: 'Add [stores.*] entries to the product config.',
+          )
+        else ...[
+          DropdownButtonFormField<String>(
+            key: ValueKey('store-${_settings.product}-${_settings.store}'),
+            initialValue: stores.any((store) => store.name == _settings.store)
+                ? _settings.store
+                : stores.first.name,
+            isExpanded: true,
+            items: [
+              for (final store in stores)
+                DropdownMenuItem(
+                  value: store.name,
+                  enabled: store.enabled,
+                  child: Text(store.label),
+                ),
+            ],
+            onChanged: _isRunning
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    _setStore(value);
+                  },
+          ),
+          const SizedBox(height: 8),
+          ClBanner(
+            kind: selectedStore?.enabled == false
+                ? ClBannerKind.warn
+                : ClBannerKind.info,
+            title: selectedStore?.enabled == false
+                ? 'Store lane disabled'
+                : 'Store lane',
+            body: requiredEnv.isEmpty
+                ? 'No required environment variables declared.'
+                : 'Requires ${requiredEnv.join(', ')}.',
+            detail: hosts.isEmpty ? 'Hosts: any' : 'Hosts: ${hosts.join(', ')}',
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ClButton(
+                icon: ClIcons.terminal,
+                kind: ClButtonKind.outlined,
+                onPressed: canDeploy
+                    ? () => _run(BuildAction.deployPreview)
+                    : null,
+                child: const Text('Preview Deploy'),
+              ),
+              ClButton(
+                icon: ClIcons.upload,
+                onPressed: canDeploy ? () => _run(BuildAction.deploy) : null,
+                child: const Text('Deploy'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildLogPanel() {
     final title = _showLiveOutput ? 'Run Output' : 'History Output';
     final subtitle = _isRunning && _startedAt != null
         ? 'started ${_timeLabel(_startedAt!)}'
         : _selectedHistory == null
         ? 'no selected run'
-        : '${_selectedHistory!.product} ${_selectedHistory!.targets}';
+        : '${_selectedHistory!.product} ${_entryScope(_selectedHistory!)}';
 
     return ClPanel(
       fillParent: true,
@@ -1214,7 +1396,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
                   meta: ClListRowMeta(
                     name: '${entry.product} · ${entry.action.label}',
                     sub:
-                        '${entry.executionMode.label} · ${_runnerProfileLabel(entry.runnerProfile)} · ${entry.targets} · ${_timeLabel(entry.startedAt)}',
+                        '${entry.executionMode.label} · ${_runnerProfileLabel(entry.runnerProfile)} · ${_entryScope(entry)} · ${_timeLabel(entry.startedAt)}',
                   ),
                   trailing: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1402,6 +1584,15 @@ String _tagFor(String line) {
   return 'log';
 }
 
+String _entryScope(BuildHistoryEntry entry) {
+  if ((entry.action == BuildAction.deploy ||
+          entry.action == BuildAction.deployPreview) &&
+      entry.store.isNotEmpty) {
+    return entry.store;
+  }
+  return entry.targets;
+}
+
 ClLogTone _toneFor(String line) {
   final lower = line.toLowerCase();
   if (line.startsWith('+') || line.startsWith('bin/')) return ClLogTone.input;
@@ -1500,6 +1691,12 @@ String? _targetSectionName(String section) {
   return section.substring(prefix.length);
 }
 
+String? _storeSectionName(String section) {
+  const prefix = 'stores.';
+  if (!section.startsWith(prefix)) return null;
+  return section.substring(prefix.length);
+}
+
 String? _tomlAssignmentName(String line) {
   return RegExp(r'^([A-Za-z0-9_-]+)\s*=').firstMatch(line)?.group(1);
 }
@@ -1508,6 +1705,29 @@ String? _tomlStringValue(String line, String key) {
   final escapedKey = RegExp.escape(key);
   final match = RegExp('^$escapedKey\\s*=\\s*"([^"]*)"').firstMatch(line);
   return match?.group(1);
+}
+
+bool? _tomlBoolValue(String line, String key) {
+  final escapedKey = RegExp.escape(key);
+  final match = RegExp(
+    '^$escapedKey\\s*=\\s*(true|false)\\s*\$',
+  ).firstMatch(line);
+  final value = match?.group(1);
+  if (value == null) return null;
+  return value == 'true';
+}
+
+List<String>? _tomlArrayValue(String line, String key) {
+  final escapedKey = RegExp.escape(key);
+  final match = RegExp(
+    '^$escapedKey\\s*=\\s*\\[(.*)\\]\\s*\$',
+  ).firstMatch(line);
+  final raw = match?.group(1);
+  if (raw == null) return null;
+  return [
+    for (final valueMatch in RegExp('"([^"]*)"').allMatches(raw))
+      valueMatch.group(1) ?? '',
+  ].where((value) => value.isNotEmpty).toList();
 }
 
 List<String> _uniqueStrings(Iterable<String> values) {

@@ -43,7 +43,9 @@ flutter run -d macos
 It can run local builds directly or dispatch GitHub workflows with runner
 profiles loaded from `build.toml`. Product repositories and workflow names come
 from each `products/*.toml` file. Local run history is stored in
-`history/build-history.json` so the team can commit it when useful.
+`history/build-history.json` so the team can commit it when useful. The console
+also reads `[stores.*]` lanes from product configs for deploy preview and
+store submission runs.
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
 
@@ -55,6 +57,10 @@ shared/cepheus-build/bin/cepheus-build build \
 ```
 
 ## Build Modes
+
+Use `release` for store/distribution builds. Use `profile` when you need a
+near-release build with profiling hooks for performance work; it is not the
+normal store-submission mode.
 
 Cepheus Build supports the same product configs in three places:
 

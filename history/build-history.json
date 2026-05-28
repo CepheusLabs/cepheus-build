@@ -10,7 +10,8 @@
     "githubWorkflow": "shared-build.yml",
     "buildrootDir": "",
     "setupBuildrootDeps": true,
-    "skipUnsupported": true
+    "skipUnsupported": true,
+    "store": "testflight_ios"
   },
   "entries": []
 }

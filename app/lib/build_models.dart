@@ -4,7 +4,9 @@ enum BuildAction {
   plan('Plan', 'plan'),
   dryRun('Dry Run', 'build'),
   build('Build', 'build'),
-  matrix('Matrix', 'ci-matrix');
+  matrix('Matrix', 'ci-matrix'),
+  deployPreview('Deploy Preview', 'deploy'),
+  deploy('Deploy', 'deploy');
 
   const BuildAction(this.label, this.command);
 
@@ -43,6 +45,7 @@ class BuildSettings {
     required this.buildrootDir,
     required this.setupBuildrootDeps,
     required this.skipUnsupported,
+    required this.store,
   });
 
   factory BuildSettings.defaults({required String toolkitRoot}) {
@@ -59,6 +62,7 @@ class BuildSettings {
       buildrootDir: '',
       setupBuildrootDeps: true,
       skipUnsupported: true,
+      store: '',
     );
   }
 
@@ -85,6 +89,7 @@ class BuildSettings {
       skipUnsupported: json['skipUnsupported'] is bool
           ? json['skipUnsupported'] as bool
           : true,
+      store: _string(json['store'], ''),
     );
   }
 
@@ -100,6 +105,7 @@ class BuildSettings {
   final String buildrootDir;
   final bool setupBuildrootDeps;
   final bool skipUnsupported;
+  final String store;
 
   BuildSettings copyWith({
     String? toolkitRoot,
@@ -114,6 +120,7 @@ class BuildSettings {
     String? buildrootDir,
     bool? setupBuildrootDeps,
     bool? skipUnsupported,
+    String? store,
   }) {
     return BuildSettings(
       toolkitRoot: toolkitRoot ?? this.toolkitRoot,
@@ -128,6 +135,7 @@ class BuildSettings {
       buildrootDir: buildrootDir ?? this.buildrootDir,
       setupBuildrootDeps: setupBuildrootDeps ?? this.setupBuildrootDeps,
       skipUnsupported: skipUnsupported ?? this.skipUnsupported,
+      store: store ?? this.store,
     );
   }
 
@@ -144,6 +152,7 @@ class BuildSettings {
       'buildrootDir': buildrootDir,
       'setupBuildrootDeps': setupBuildrootDeps,
       'skipUnsupported': skipUnsupported,
+      'store': store,
     };
   }
 }
@@ -159,6 +168,7 @@ class BuildHistoryEntry {
     required this.buildMode,
     required this.repoRoot,
     required this.githubRepo,
+    required this.store,
     required this.command,
     required this.startedAt,
     required this.durationMs,
@@ -182,6 +192,7 @@ class BuildHistoryEntry {
       buildMode: _string(json['buildMode'], 'release'),
       repoRoot: _string(json['repoRoot'], ''),
       githubRepo: _string(json['githubRepo'], ''),
+      store: _string(json['store'], ''),
       command: _string(json['command'], ''),
       startedAt:
           DateTime.tryParse(_string(json['startedAt'], '')) ??
@@ -203,6 +214,7 @@ class BuildHistoryEntry {
   final String buildMode;
   final String repoRoot;
   final String githubRepo;
+  final String store;
   final String command;
   final DateTime startedAt;
   final int durationMs;
@@ -236,6 +248,7 @@ class BuildHistoryEntry {
       'buildMode': buildMode,
       'repoRoot': repoRoot,
       'githubRepo': githubRepo,
+      'store': store,
       'command': command,
       'startedAt': startedAt.toIso8601String(),
       'durationMs': durationMs,
