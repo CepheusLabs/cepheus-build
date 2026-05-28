@@ -1,0 +1,97 @@
+[product]
+slug = "anvil"
+display_name = "Anvil"
+repo_root = "../../anvil"
+app_dir = "app"
+
+[version]
+env_prefix = "ANVIL"
+
+[groups]
+desktop = ["macos", "windows", "linux"]
+mobile = ["ios", "android"]
+all = ["web", "android", "ios", "macos", "windows", "linux"]
+
+[targets.web]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-web.ps1",
+]
+artifacts = ["app/build/web"]
+tools = ["pwsh", "flutter", "flutter_rust_bridge_codegen", "wasm-pack"]
+
+[targets.android]
+hosts = ["linux", "macos"]
+cwd = "."
+commands = [
+  "cd core/pd-ffi && cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -t x86 -o \"$CBUILD_APP_DIR/android/app/src/main/jniLibs\" build --release",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build apk --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+  "cd \"$CBUILD_APP_DIR\" && flutter build appbundle --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = [
+  "app/build/app/outputs/flutter-apk/app-release.apk",
+  "app/build/app/outputs/bundle/release/app-release.aab",
+]
+tools = ["cargo", "cargo-ndk", "flutter"]
+
+[targets.ios]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "rustup target add aarch64-apple-ios aarch64-apple-ios-sim",
+  "cd core/pd-ffi && cargo build --release --target aarch64-apple-ios",
+  "cd core/pd-ffi && cargo build --release --target aarch64-apple-ios-sim",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build ipa --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["app/build/ios/ipa/*.ipa"]
+tools = ["cargo", "flutter", "xcodebuild", "pod"]
+
+[targets.macos]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "cargo build --release --workspace",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build macos --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["app/build/macos/Build/Products/Release/Anvil.app"]
+tools = ["cargo", "flutter", "xcodebuild"]
+
+[targets.windows]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { cargo build --release --workspace; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }\"",
+]
+artifacts = ["app/build/windows/x64/runner/Release"]
+tools = ["pwsh", "cargo", "flutter"]
+
+[targets.linux]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo build --release --workspace",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build linux --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["app/build/linux/x64/release/bundle"]
+tools = ["cargo", "flutter"]
+
+[stores.testflight_ios]
+enabled = false
+cwd = "."
+required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID"]
+commands = [
+  "xcrun altool --upload-app --file app/build/ios/ipa/*.ipa --type ios --apiKey \"$APPSTORE_CONNECT_KEY_ID\" --apiIssuer \"$APPSTORE_CONNECT_ISSUER_ID\"",
+]
+
+[stores.google_play]
+enabled = false
+cwd = "."
+required_env = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
+commands = [
+  "python3 -m cepheus_build.deploy.google_play --aab app/build/app/outputs/bundle/release/app-release.aab --package com.cepheuslabs.anvil --track \"${PLAY_TRACK:-internal}\" --service-account \"$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON\"",
+]

@@ -1,0 +1,128 @@
+[product]
+slug = "colorwake-studio"
+display_name = "Colorwake Studio"
+repo_root = "../../colorwake-studio"
+app_dir = "apps/colorwake_studio"
+
+[version]
+env_prefix = "COLORWAKE"
+
+[groups]
+desktop = ["macos", "windows", "linux"]
+desktop_packages = ["windows-msix"]
+mobile = ["ios", "android"]
+stores = ["ios", "macos", "android", "windows-msix"]
+all = ["web", "android", "ios", "macos", "windows", "linux"]
+
+[targets.web]
+hosts = ["linux", "macos", "windows"]
+flutter = "web"
+flutter_args = ["--no-wasm-dry-run"]
+artifacts = ["apps/colorwake_studio/build/web"]
+tools = ["flutter"]
+
+[targets.android]
+hosts = ["linux", "macos"]
+cwd = "."
+commands = [
+  "scripts/build-android-native.sh",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build apk --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+  "cd \"$CBUILD_APP_DIR\" && flutter build appbundle --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = [
+  "apps/colorwake_studio/build/app/outputs/flutter-apk/app-release.apk",
+  "apps/colorwake_studio/build/app/outputs/bundle/release/app-release.aab",
+]
+tools = ["cargo", "cargo-ndk", "flutter"]
+
+[targets.ios]
+hosts = ["macos"]
+cwd = "apps/colorwake_studio"
+commands = [
+  "flutter pub get",
+  "flutter build ipa --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["apps/colorwake_studio/build/ios/ipa/*.ipa"]
+tools = ["cargo", "flutter", "xcodebuild", "pod"]
+
+[targets.macos]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "rustup target add aarch64-apple-darwin x86_64-apple-darwin",
+  "cargo build --release -p colorwake_native --target aarch64-apple-darwin",
+  "cargo build --release -p colorwake_native --target x86_64-apple-darwin",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build macos --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+  "mkdir -p \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app/Contents/Frameworks\"",
+  "lipo -create \"$CBUILD_REPO_ROOT/target/aarch64-apple-darwin/release/libcolorwake_native.dylib\" \"$CBUILD_REPO_ROOT/target/x86_64-apple-darwin/release/libcolorwake_native.dylib\" -output \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app/Contents/Frameworks/libcolorwake_native.dylib\"",
+  "install_name_tool -id \"@rpath/libcolorwake_native.dylib\" \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app/Contents/Frameworks/libcolorwake_native.dylib\"",
+  "/usr/bin/codesign --force --sign - \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app/Contents/Frameworks/libcolorwake_native.dylib\"",
+  "/usr/bin/codesign --force --deep --sign - \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app\"",
+]
+artifacts = ["apps/colorwake_studio/build/macos/Build/Products/Release/colorwake_studio.app"]
+tools = ["cargo", "flutter", "xcodebuild", "lipo", "install_name_tool", "codesign"]
+
+[targets.windows]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { cargo build --release -p colorwake_native; Copy-Item -LiteralPath (Join-Path $env:CBUILD_REPO_ROOT 'target/release/colorwake_native.dll') -Destination (Join-Path $env:CBUILD_APP_DIR 'colorwake_native.dll') -Force; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }\"",
+]
+artifacts = ["apps/colorwake_studio/build/windows/x64/runner/Release"]
+tools = ["pwsh", "cargo", "flutter"]
+
+[targets.windows-msix]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { cargo build --release -p colorwake_native; Copy-Item -LiteralPath (Join-Path $env:CBUILD_REPO_ROOT 'target/release/colorwake_native.dll') -Destination (Join-Path $env:CBUILD_APP_DIR 'colorwake_native.dll') -Force; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER; dart run msix:create }\"",
+]
+artifacts = ["apps/colorwake_studio/build/windows/x64/runner/Release/*.msix"]
+tools = ["pwsh", "cargo", "flutter", "dart"]
+
+[targets.linux]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo build --release -p colorwake_native",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build linux --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["apps/colorwake_studio/build/linux/x64/release/bundle"]
+tools = ["cargo", "flutter"]
+
+[stores.testflight_ios]
+enabled = true
+hosts = ["macos"]
+cwd = "."
+required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID"]
+commands = [
+  "scripts/testflight.sh ios --upload",
+]
+
+[stores.testflight_macos]
+enabled = true
+hosts = ["macos"]
+cwd = "."
+required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID"]
+commands = [
+  "scripts/testflight.sh macos --upload",
+]
+
+[stores.google_play]
+enabled = false
+cwd = "."
+required_env = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
+commands = [
+  "python3 -m cepheus_build.deploy.google_play --aab \"$CBUILD_APP_DIR/build/app/outputs/bundle/release/app-release.aab\" --package com.cepheuslabs.colorwakestudio --track \"${PLAY_TRACK:-internal}\" --service-account \"$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON\"",
+]
+
+[stores.microsoft_store]
+enabled = false
+cwd = "."
+required_env = ["PARTNER_CENTER_TENANT_ID", "PARTNER_CENTER_CLIENT_ID", "PARTNER_CENTER_CLIENT_SECRET", "PARTNER_CENTER_APP_ID"]
+commands = [
+  "pwsh -NoProfile -File \"$CBUILD_TOOL_ROOT/scripts/submit-msstore.ps1\" -PackagePath \"$CBUILD_APP_DIR/build/windows/x64/runner/Release/ColorwakeStudio.msix\"",
+]

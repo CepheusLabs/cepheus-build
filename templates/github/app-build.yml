@@ -1,0 +1,12 @@
+name: app-build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    with:
+      product: printdeck
+      toolkit-ref: main

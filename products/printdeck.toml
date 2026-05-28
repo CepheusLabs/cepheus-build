@@ -1,0 +1,153 @@
+[product]
+slug = "printdeck"
+display_name = "Printdeck"
+repo_root = "../../printdeck"
+app_dir = "frontend"
+
+[version]
+env_prefix = "PRINTDECK"
+
+[groups]
+desktop = ["macos", "windows", "linux"]
+desktop_packages = ["macos-dmg", "windows-msix", "linux-deb", "linux-appimage"]
+mobile = ["ios", "android"]
+stores = ["ios", "android", "macos-appstore", "windows-msix"]
+all = ["web", "android", "ios", "macos", "windows", "linux"]
+
+[flutter.dart_defines]
+API_BASE_URL = { env = "PRINTDECK_API_BASE_URL", default = "https://printdeck.app/api/v1" }
+WS_BASE_URL = { env = "PRINTDECK_WS_BASE_URL", default = "wss://printdeck.app/api/v1/ws" }
+
+[targets.web]
+hosts = ["linux", "macos", "windows"]
+cwd = "frontend"
+commands = [
+  "make web VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/web"]
+tools = ["flutter", "make"]
+
+[targets.android]
+hosts = ["linux", "macos", "windows"]
+cwd = "frontend"
+commands = [
+  "make android-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = [
+  "frontend/build/app/outputs/flutter-apk/app-release.apk",
+  "frontend/build/app/outputs/bundle/release/app-release.aab",
+]
+tools = ["flutter", "make", "keytool"]
+
+[targets.ios]
+hosts = ["macos"]
+cwd = "frontend"
+commands = [
+  "make ios-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/ios/ipa/*.ipa"]
+tools = ["flutter", "xcodebuild", "pod", "make"]
+
+[targets.macos]
+hosts = ["macos"]
+cwd = "frontend"
+commands = [
+  "make macos-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/macos/Build/Products/Release/printdeck.app"]
+tools = ["flutter", "xcodebuild", "make"]
+
+[targets.macos-dmg]
+hosts = ["macos"]
+cwd = "frontend"
+commands = [
+  "make macos-dmg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/macos/printdeck-*-macos.dmg"]
+tools = ["flutter", "xcodebuild", "create-dmg", "make"]
+
+[targets.macos-appstore]
+hosts = ["macos"]
+cwd = "frontend"
+commands = [
+  "make macos-mas-pkg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/macos/printdeck-*-mas.pkg"]
+tools = ["flutter", "xcodebuild", "productbuild", "make"]
+
+[targets.windows]
+hosts = ["windows"]
+cwd = "frontend"
+commands = [
+  "make windows-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/windows/x64/runner/Release"]
+tools = ["flutter", "make"]
+
+[targets.windows-msix]
+hosts = ["windows"]
+cwd = "frontend"
+commands = [
+  "make windows-msix VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/windows/printdeck-*.msix"]
+tools = ["flutter", "dart", "python3", "make"]
+
+[targets.linux]
+hosts = ["linux"]
+cwd = "frontend"
+commands = [
+  "make linux-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/linux/x64/release/bundle"]
+tools = ["flutter", "make"]
+
+[targets.linux-deb]
+hosts = ["linux"]
+cwd = "frontend"
+commands = [
+  "make linux-deb VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/linux/printdeck-*-linux-amd64.deb"]
+tools = ["flutter", "dpkg-deb", "make"]
+
+[targets.linux-appimage]
+hosts = ["linux"]
+cwd = "frontend"
+commands = [
+  "make linux-appimage VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+artifacts = ["frontend/build/linux/printdeck-*-linux-x86_64.AppImage"]
+tools = ["flutter", "appimagetool", "make"]
+
+[stores.testflight_ios]
+enabled = true
+cwd = "frontend"
+required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID"]
+commands = [
+  "make deploy-ios VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+
+[stores.google_play]
+enabled = true
+cwd = "frontend"
+required_env = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
+commands = [
+  "make deploy-android VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+
+[stores.mac_app_store]
+enabled = true
+cwd = "frontend"
+required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID", "MACOS_MAS_INSTALLER_CERT", "MACOS_MAS_APP_CERT"]
+commands = [
+  "make deploy-macos-appstore VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+]
+
+[stores.microsoft_store]
+enabled = true
+cwd = "frontend"
+required_env = ["PARTNER_CENTER_TENANT_ID", "PARTNER_CENTER_CLIENT_ID", "PARTNER_CENTER_CLIENT_SECRET", "PARTNER_CENTER_APP_ID"]
+commands = [
+  "pwsh -NoProfile -File \"$CBUILD_TOOL_ROOT/scripts/submit-msstore.ps1\" -PackagePath \"$CBUILD_REPO_ROOT/frontend/build/windows/printdeck-$CBUILD_VERSION.msix\"",
+]

@@ -1,0 +1,87 @@
+[product]
+slug = "deckhand"
+display_name = "Deckhand"
+repo_root = "../../deckhand-app"
+app_dir = "app"
+
+[version]
+env_prefix = "DECKHAND"
+
+[groups]
+desktop = ["macos", "windows", "linux"]
+desktop_packages = ["macos-dmg", "windows-installer", "linux-appimage"]
+all = ["macos", "windows", "linux"]
+
+[targets.macos]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "scripts/build.sh macos --release",
+]
+artifacts = ["app/build/macos/Build/Products/Release/deckhand.app"]
+tools = ["bash", "go", "flutter", "xcodebuild"]
+
+[targets.macos-dmg]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "scripts/build.sh macos --release",
+  "packaging/macos/build_dmg.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/macos/dist/*.dmg"]
+tools = ["bash", "go", "flutter", "xcodebuild", "codesign"]
+
+[targets.windows]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "bash scripts/build.sh windows --release",
+]
+artifacts = ["app/build/windows/x64/runner/Release"]
+tools = ["bash", "go", "flutter", "windres"]
+
+[targets.windows-installer]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "bash scripts/build.sh windows --release",
+  "iscc /dVersion=\"$CBUILD_VERSION\" packaging\\windows\\deckhand.iss",
+]
+artifacts = ["packaging/windows/dist/*"]
+tools = ["bash", "go", "flutter", "windres", "iscc"]
+
+[targets.linux]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "scripts/build.sh linux --release",
+]
+artifacts = ["app/build/linux/x64/release/bundle"]
+tools = ["bash", "go", "flutter"]
+
+[targets.linux-appimage]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "scripts/build.sh linux --release",
+  "packaging/linux/build_appimage.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.AppImage"]
+tools = ["bash", "go", "flutter", "appimagetool"]
+
+[targets.ios]
+enabled = false
+
+[targets.android]
+enabled = false
+
+[targets.web]
+enabled = false
+
+[stores.github_release]
+enabled = true
+cwd = "."
+required_env = ["GITHUB_TOKEN"]
+commands = [
+  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" packaging/windows/dist/* packaging/macos/dist/* packaging/linux/dist/* --clobber",
+]

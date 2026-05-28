@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CepheusLabs/cepheus-build/schemas/product.schema.json",
+  "title": "Cepheus Build product config",
+  "type": "object",
+  "required": ["product", "targets"],
+  "properties": {
+    "product": {
+      "type": "object",
+      "required": ["slug", "display_name", "app_dir"],
+      "properties": {
+        "slug": { "type": "string" },
+        "display_name": { "type": "string" },
+        "repo_root": { "type": "string" },
+        "app_dir": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "version": {
+      "type": "object",
+      "properties": {
+        "env_prefix": { "type": "string" },
+        "static_version": { "type": "string" },
+        "utc": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "flutter": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "hosts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "cwd": { "type": "string" },
+          "flutter": { "type": "string" },
+          "flutter_args": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "commands": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "pre": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "post": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "stores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "hosts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "cwd": { "type": "string" },
+          "required_env": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "commands": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

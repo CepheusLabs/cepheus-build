@@ -1,0 +1,84 @@
+name: Shared App Build
+
+on:
+  workflow_call:
+    inputs:
+      product:
+        description: Product config name in products/<product>.toml.
+        required: true
+        type: string
+      toolkit-ref:
+        description: cepheus-build ref to checkout.
+        required: false
+        default: main
+        type: string
+      mode:
+        description: Flutter build mode.
+        required: false
+        default: release
+        type: string
+      matrix-json:
+        description: Build matrix JSON.
+        required: false
+        default: '[{"name":"linux","runner":"ubuntu-latest","targets":"web android linux"},{"name":"macos","runner":"macos-latest","targets":"ios macos"},{"name":"windows","runner":"windows-latest","targets":"windows"}]'
+        type: string
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix-json) }}
+    steps:
+      - name: Checkout product
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Checkout build toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: CepheusLabs/cepheus-build
+          ref: ${{ inputs.toolkit-ref }}
+          path: .cepheus-build
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python)"
+          "$PYTHON_BIN" .cepheus-build/bin/cepheus-build build \
+            --product "${{ inputs.product }}" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --mode "${{ inputs.mode }}" \
+            --skip-unsupported \
+            ${{ matrix.targets }}
+
+      - name: Collect artifact paths
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python)"
+          "$PYTHON_BIN" .cepheus-build/bin/cepheus-build artifacts \
+            --product "${{ inputs.product }}" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --copy-to "$RUNNER_TEMP/cepheus-artifacts" \
+            ${{ matrix.targets }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.product }}-${{ matrix.name }}
+          path: ${{ runner.temp }}/cepheus-artifacts
+          if-no-files-found: warn
