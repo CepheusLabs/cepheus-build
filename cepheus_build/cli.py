@@ -66,6 +66,8 @@ TARGET_HOST_PREFERENCES: dict[str, list[str]] = {
     "windows-msix": ["windows"],
 }
 
+VIRTUAL_TOOLS = {"buildroot"}
+
 
 @dataclass(frozen=True)
 class Stamp:
@@ -499,6 +501,7 @@ def build_ci_matrix(
                 "setup_rust": bool({"cargo", "rustup", "cargo-ndk", "wasm-pack"} & tools),
                 "setup_cargo_ndk": "cargo-ndk" in tools,
                 "setup_wasm_pack": "wasm-pack" in tools,
+                "setup_buildroot": "buildroot" in tools,
             }
         )
     if not rows:
@@ -580,6 +583,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if not ensure_host(target_name, target, skip_unsupported=True):
             continue
     for tool in sorted(tools):
+        if tool in VIRTUAL_TOOLS:
+            print(f"{tool}: managed by product command/workflow setup")
+            continue
         path = shutil.which(tool)
         print(f"{tool}: {path or 'missing'}")
         if not path:

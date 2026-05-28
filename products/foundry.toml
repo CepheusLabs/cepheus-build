@@ -1,0 +1,248 @@
+[product]
+slug = "foundry"
+display_name = "Foundry"
+repo_root = "../../foundry"
+app_dir = "."
+
+[version]
+env_prefix = "FOUNDRY"
+
+[groups]
+quality = ["fmt", "clippy", "test"]
+host = ["host-linux", "host-macos", "host-windows"]
+cli = ["cli-linux", "cli-macos", "cli-windows"]
+mcu = ["mcu-rp2040", "mcu-manta-m8p-h723"]
+os = ["os-image", "os-validate", "os-smoke", "os-package", "deckhand-stage-existing"]
+release = ["cli-linux", "cli-macos", "cli-windows", "mcu-rp2040", "mcu-manta-m8p-h723", "deckhand-stage", "os-update-bundle"]
+all = ["fmt", "clippy", "test", "cli-linux", "cli-macos", "cli-windows", "mcu-rp2040", "mcu-manta-m8p-h723", "os-image", "os-package", "deckhand-stage-existing"]
+desktop = ["cli-linux", "cli-macos", "cli-windows"]
+
+[targets.fmt]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = [
+  "cargo fmt --all -- --check",
+]
+tools = ["cargo"]
+
+[targets.clippy]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = [
+  "cargo clippy --all-targets --all-features -- -D warnings",
+]
+tools = ["cargo"]
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = [
+  "cargo test --workspace --all-features",
+]
+tools = ["cargo"]
+
+[targets.host-linux]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo build --release --workspace",
+]
+artifacts = [
+  "target/release/foundry",
+  "target/release/foundryd",
+]
+tools = ["cargo"]
+
+[targets.host-macos]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "cargo build --release --workspace",
+]
+artifacts = [
+  "target/release/foundry",
+  "target/release/foundryd",
+]
+tools = ["cargo"]
+
+[targets.host-windows]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "cargo build --release --workspace",
+]
+artifacts = [
+  "target/release/foundry.exe",
+  "target/release/foundryd.exe",
+]
+tools = ["cargo"]
+
+[targets.cli-linux]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "rustup target add x86_64-unknown-linux-gnu",
+  "cargo build --release --target x86_64-unknown-linux-gnu --bin foundry",
+]
+artifacts = ["target/x86_64-unknown-linux-gnu/release/foundry"]
+tools = ["cargo", "rustup"]
+
+[targets.cli-macos]
+hosts = ["macos"]
+cwd = "."
+commands = [
+  "rustup target add aarch64-apple-darwin",
+  "cargo build --release --target aarch64-apple-darwin --bin foundry",
+]
+artifacts = ["target/aarch64-apple-darwin/release/foundry"]
+tools = ["cargo", "rustup"]
+
+[targets.cli-windows]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "rustup target add x86_64-pc-windows-msvc",
+  "cargo build --release --target x86_64-pc-windows-msvc --bin foundry",
+]
+artifacts = ["target/x86_64-pc-windows-msvc/release/foundry.exe"]
+tools = ["cargo", "rustup"]
+
+[targets.mcu-rp2040]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = [
+  "rustup target add thumbv6m-none-eabi",
+  "cargo xtask build-mcu rp2040",
+]
+artifacts = [
+  "target/foundry-mcu/rp2040/foundry-mcu-rp2040.elf",
+  "target/foundry-mcu/rp2040/foundry-mcu-rp2040.elf.sha256",
+  "target/foundry-mcu/rp2040/foundry-mcu-rp2040.json",
+]
+tools = ["cargo", "rustup"]
+
+[targets.mcu-manta-m8p-h723]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = [
+  "rustup target add thumbv7em-none-eabihf",
+  "cargo xtask build-mcu manta-m8p-h723",
+]
+artifacts = [
+  "target/foundry-mcu/manta-m8p-h723/foundry-mcu-manta-m8p-h723.elf",
+  "target/foundry-mcu/manta-m8p-h723/foundry-mcu-manta-m8p-h723.elf.sha256",
+  "target/foundry-mcu/manta-m8p-h723/foundry-mcu-manta-m8p-h723.json",
+]
+tools = ["cargo", "rustup"]
+
+[targets.os-configure]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask build-os manta-m8p-cm4 --buildroot-dir "$BR_DIR" --configure-only',
+]
+artifacts = ["target/foundry-os/manta-m8p-cm4/buildroot/.config"]
+tools = ["cargo", "git", "make", "buildroot"]
+
+[targets.os-image]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "rustup target add thumbv7em-none-eabihf",
+  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask build-os manta-m8p-cm4 --buildroot-dir "$BR_DIR"',
+]
+artifacts = [
+  "target/foundry-os/manta-m8p-cm4/images",
+  "target/foundry-os/manta-m8p-cm4/images/foundry-image-manifest.json",
+  "target/foundry-os/manta-m8p-cm4/images/deckhand-image-manifest.json",
+  "target/foundry-os/manta-m8p-cm4/images/artifact-index.json",
+]
+tools = ["cargo", "git", "make", "rustup", "buildroot"]
+
+[targets.os-validate]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo xtask validate-os manta-m8p-cm4",
+]
+tools = ["cargo"]
+
+[targets.os-smoke]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo xtask smoke-os manta-m8p-cm4",
+]
+tools = ["cargo"]
+
+[targets.os-qemu-smoke]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo xtask qemu-smoke-os manta-m8p-cm4",
+]
+tools = ["cargo", "qemu-system-aarch64"]
+
+[targets.os-package]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "cargo xtask package-os manta-m8p-cm4",
+]
+artifacts = [
+  "target/foundry-os/manta-m8p-cm4/package/foundry-os-manta-m8p-cm4.tar.gz",
+  "target/foundry-os/manta-m8p-cm4/package/foundry-os-manta-m8p-cm4.tar.gz.sha256",
+]
+tools = ["cargo", "tar"]
+
+[targets.deckhand-stage]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "rustup target add thumbv7em-none-eabihf",
+  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask stage-os manta-m8p-cm4 --buildroot-dir "$BR_DIR"',
+]
+artifacts = ["target/foundry-os/manta-m8p-cm4/deckhand-stage"]
+tools = ["cargo", "git", "make", "rustup", "tar", "buildroot"]
+
+[targets.deckhand-stage-existing]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "rustup target add thumbv7em-none-eabihf",
+  "cargo xtask stage-os manta-m8p-cm4 --skip-build",
+]
+artifacts = ["target/foundry-os/manta-m8p-cm4/deckhand-stage"]
+tools = ["cargo", "rustup", "tar"]
+
+[targets.os-update-bundle]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash os/release/signing/generate-dev-ca.sh",
+  'cargo xtask package-update manta-m8p-cm4 --version "$CBUILD_VERSION" --channel "${FOUNDRY_CHANNEL:-developer}"',
+]
+artifacts = [
+  "target/foundry-os/manta-m8p-cm4/update-bundle/*.raucb",
+  "target/foundry-os/manta-m8p-cm4/update-bundle/*.sha256",
+  "target/foundry-os/manta-m8p-cm4/update-bundle/foundry-update-bundle-manifest.json",
+]
+tools = ["bash", "cargo", "openssl", "rauc"]
+
+[targets.opi-conformance]
+hosts = ["linux", "macos"]
+cwd = "."
+commands = [
+  'test -n "$FOUNDRY_OPI_BASE_URL"',
+  'cargo xtask opi-conformance --base-url "$FOUNDRY_OPI_BASE_URL"',
+]
+tools = ["cargo"]
+
+[stores.github_release]
+enabled = true
+hosts = ["linux"]
+cwd = "."
+required_env = ["GITHUB_TOKEN"]
+commands = [
+  'gh release upload "v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER" target/x86_64-unknown-linux-gnu/release/foundry target/aarch64-apple-darwin/release/foundry target/x86_64-pc-windows-msvc/release/foundry.exe target/foundry-mcu/*/* target/foundry-os/manta-m8p-cm4/package/* target/foundry-os/manta-m8p-cm4/update-bundle/* --clobber',
+]

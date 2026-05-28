@@ -57,6 +57,16 @@ on:
         required: false
         default: '1.22'
         type: string
+      setup-buildroot-deps:
+        description: Install Linux packages needed by Buildroot when a matrix row uses buildroot.
+        required: false
+        default: true
+        type: boolean
+      buildroot-dir:
+        description: Optional Buildroot checkout path for products that build OS images.
+        required: false
+        default: ''
+        type: string
       matrix-json:
         description: 'Optional full matrix JSON override. Shape: {"include":[{"name":"linux","runner":"ubuntu-latest","targets":"web linux"}]}.'
         required: false
@@ -170,8 +180,28 @@ jobs:
           go-version: ${{ inputs['go-version'] }}
           cache: false
 
+      - name: Install Buildroot dependencies
+        if: ${{ inputs['setup-buildroot-deps'] && matrix.setup_buildroot && matrix.host == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            build-essential \
+            cpio \
+            file \
+            git \
+            libncurses-dev \
+            python3 \
+            rsync \
+            unzip \
+            wget
+
       - name: Build
         shell: bash
+        env:
+          BUILDROOT_DIR: ${{ inputs['buildroot-dir'] }}
         run: |
           set -euo pipefail
           PYTHON_BIN="$(command -v python3 || command -v python)"

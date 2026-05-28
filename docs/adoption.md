@@ -108,7 +108,24 @@ The generated rows use these labels by default:
 
 Rows also carry setup hints such as `setup_flutter`, `setup_rust`, and
 `setup_go`. The workflow uses those hints to install only the toolchains needed
-by that row.
+by that row. Foundry OS rows also carry `setup_buildroot`, which installs the
+Linux packages Buildroot needs on GitHub-hosted runners.
+
+For pre-baked Foundry self-hosted runners, disable that extra package install
+and point the build at your prepared Buildroot checkout:
+
+```yaml
+jobs:
+  build:
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    with:
+      product: foundry
+      runner-profile: self-hosted
+      planner-runner-json: '["self-hosted","linux"]'
+      targets: os
+      setup-buildroot-deps: false
+      buildroot-dir: /opt/buildroot
+```
 
 ## Custom Matrices
 

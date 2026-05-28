@@ -14,6 +14,8 @@ The first supported product configs are:
 - `printdeck` - Flutter app plus existing desktop/mobile store packaging.
 - `anvil` - Flutter app plus Rust slicer/FFI workspace.
 - `deckhand` - Flutter desktop app plus Go sidecar/helper packaging.
+- `foundry` - Rust host tools, embedded MCU firmware, and Buildroot-based
+  printer OS images staged for Deckhand.
 
 ## Quick Start
 
@@ -25,6 +27,7 @@ From a checkout beside the app repos:
 ./bin/cepheus-build doctor -p anvil desktop
 ./bin/cepheus-build build -p colorwake-studio macos
 ./bin/cepheus-build artifacts -p deckhand desktop_packages --copy-to dist/deckhand
+./bin/cepheus-build plan -p foundry os
 ```
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
@@ -55,9 +58,9 @@ You can inspect the generated CI matrix without running a build:
 ```
 
 Generated matrix rows include setup hints for Flutter, Rust, Go, `cargo-ndk`,
-and `wasm-pack`. The reusable workflow installs those on GitHub-hosted runners
-by default; self-hosted workflows can disable setup when runner images already
-include the toolchains.
+`wasm-pack`, and Buildroot dependencies. The reusable workflow installs those
+on GitHub-hosted runners by default; self-hosted workflows can disable setup
+when runner images already include the toolchains.
 
 `ipadOS` ships through the `ios` lane. Flutter/Xcode produces the universal
 iOS app; product entitlements and App Store settings decide iPhone/iPad
