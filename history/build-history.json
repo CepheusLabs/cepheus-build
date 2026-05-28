@@ -1,0 +1,16 @@
+{
+  "settings": {
+    "product": "printdeck",
+    "targets": "all",
+    "executionMode": "local",
+    "runnerProfile": "github-hosted",
+    "buildMode": "release",
+    "repoRoot": "",
+    "githubRepo": "CepheusLabs/printdeck",
+    "githubWorkflow": "shared-build.yml",
+    "buildrootDir": "",
+    "setupBuildrootDeps": true,
+    "skipUnsupported": true
+  },
+  "entries": []
+}

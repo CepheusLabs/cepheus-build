@@ -1,0 +1,4 @@
+[submodule "shared/forge"]
+	path = shared/forge
+	url = ../forge.git
+	branch = main

@@ -30,6 +30,19 @@ From a checkout beside the app repos:
 ./bin/cepheus-build plan -p foundry os
 ```
 
+## GUI
+
+The lightweight desktop console lives in `app/` and uses Forge for UI:
+
+```bash
+cd app
+flutter run -d macos
+```
+
+It can run local builds directly or dispatch GitHub workflows with
+GitHub-provided or org self-hosted runners. Local run history is stored in
+`history/build-history.json` so the team can commit it when useful.
+
 From inside an app repo that vendors this as `shared/cepheus-build`:
 
 ```bash
