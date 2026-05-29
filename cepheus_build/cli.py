@@ -63,6 +63,7 @@ def augment_process_path() -> None:
         Path("/opt/homebrew/bin"),
         Path("/opt/homebrew/sbin"),
         Path("/usr/local/bin"),
+        Path("/Applications/Docker.app/Contents/Resources/bin"),
     ]
     existing = [part for part in os.environ.get("PATH", "").split(os.pathsep) if part]
     normalized = {str(Path(part).expanduser()) for part in existing}
