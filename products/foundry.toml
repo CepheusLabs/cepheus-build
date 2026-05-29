@@ -141,6 +141,8 @@ tools = ["cargo", "rustup"]
 [targets.os-configure]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action configure"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action configure"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action configure"] }
 artifacts = ["target/foundry-os/manta-m8p-cm4/.config"]
 tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
@@ -148,6 +150,8 @@ tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker"
 [targets.os-image]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action build"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action build"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action build"] }
 artifacts = [
   "target/foundry-os/manta-m8p-cm4/images",
@@ -160,24 +164,32 @@ tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker"
 [targets.os-validate]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action validate"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action validate"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action validate"] }
 tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-smoke]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action smoke"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action smoke"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action smoke"] }
 tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-qemu-smoke]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action qemu-smoke"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action qemu-smoke"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action qemu-smoke"] }
 tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-package]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action package"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action package"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action package"] }
 artifacts = [
   "target/foundry-os/manta-m8p-cm4/package/foundry-os-manta-m8p-cm4.tar.gz",
@@ -188,6 +200,8 @@ tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker"
 [targets.deckhand-stage]
 hosts = ["linux", "macos", "windows"]
 cwd = "."
+env = { linux = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" }, macos = { DOCKER_CONFIG = "$CBUILD_REPO_ROOT/target/cepheus-build/docker-public" } }
+pre = { linux = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"], macos = ['mkdir -p "$DOCKER_CONFIG" && printf "{\"auths\":{}}\n" > "$DOCKER_CONFIG/config.json"', "chmod +x scripts/build-os.sh scripts/build-setup-ui.sh"] }
 commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action stage"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action stage"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action stage"] }
 artifacts = ["target/foundry-os/manta-m8p-cm4/deckhand-stage"]
 tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }

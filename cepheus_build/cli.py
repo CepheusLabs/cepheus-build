@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import re
+import signal
 import shlex
 import shutil
 import subprocess
@@ -41,6 +42,11 @@ VIRTUAL_TOOLS = {"buildroot"}
 COCOAPODS_SPECS_REPAIR_PATTERNS = [
     "CocoaPods's specs repository is too out-of-date",
     "CocoaPods could not find compatible versions for pod",
+]
+
+COMMAND_OUTPUT_FAILURE_PATTERNS = [
+    "Encountered error while creating the IPA:",
+    "exportArchive Failed",
 ]
 
 
@@ -309,6 +315,38 @@ def build_env(
     return env
 
 
+def expand_env_refs(value: str, env: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1) or match.group(2) or ""
+        return env.get(name, match.group(0))
+
+    return re.sub(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}", replace, value)
+
+
+def target_env_values(target: dict[str, Any], env: dict[str, str]) -> dict[str, str]:
+    raw = target.get("env")
+    if not isinstance(raw, dict):
+        return {}
+
+    selected: dict[str, Any]
+    host = current_host()
+    if any(key in raw for key in [*HOST_ORDER, "default"]):
+        selected = {}
+        default_env = raw.get("default")
+        host_env = raw.get(host)
+        if isinstance(default_env, dict):
+            selected.update(default_env)
+        if isinstance(host_env, dict):
+            selected.update(host_env)
+    else:
+        selected = raw
+
+    resolved: dict[str, str] = {}
+    for key, value in selected.items():
+        resolved[str(key)] = expand_env_refs(resolve_value(value, env), env)
+    return resolved
+
+
 def run_command(
     command: str,
     cwd: Path,
@@ -322,7 +360,7 @@ def run_command(
     if dry_run:
         return
     returncode, output = run_shell_streaming(rendered, cwd, env)
-    if returncode == 0:
+    if returncode == 0 and not should_treat_output_as_failure(output):
         return
 
     if allow_repairs and should_repair_cocoapods_specs(output):
@@ -330,13 +368,16 @@ def run_command(
         print("repair: retrying failed command after CocoaPods specs update", flush=True)
         print(f"+ {rendered}", flush=True)
         returncode, output = run_shell_streaming(rendered, cwd, env)
-        if returncode == 0:
+        if returncode == 0 and not should_treat_output_as_failure(output):
             return
 
-    raise subprocess.CalledProcessError(returncode, rendered, output=output)
+    raise subprocess.CalledProcessError(returncode or 1, rendered, output=output)
 
 
 def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[int, str]:
+    popen_kwargs: dict[str, Any] = {}
+    if os.name != "nt":
+        popen_kwargs["start_new_session"] = True
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -346,6 +387,7 @@ def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[i
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
+        **popen_kwargs,
     )
     output: deque[str] = deque(maxlen=1200)
     output_lock = threading.Lock()
@@ -356,21 +398,52 @@ def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[i
                 with output_lock:
                     output.append(line)
                 print(line, end="", file=destination, flush=True)
+        except ValueError:
+            pass
         finally:
-            pipe.close()
+            try:
+                pipe.close()
+            except ValueError:
+                pass
 
     threads = []
     if process.stdout is not None:
-        threads.append(threading.Thread(target=stream, args=(process.stdout, sys.stdout)))
+        threads.append(threading.Thread(target=stream, args=(process.stdout, sys.stdout), daemon=True))
     if process.stderr is not None:
-        threads.append(threading.Thread(target=stream, args=(process.stderr, sys.stderr)))
+        threads.append(threading.Thread(target=stream, args=(process.stderr, sys.stderr), daemon=True))
     for thread in threads:
         thread.start()
 
-    returncode = process.wait()
+    try:
+        returncode = process.wait()
+    except KeyboardInterrupt:
+        terminate_process_tree(process)
+        raise
+    for pipe in [process.stdout, process.stderr]:
+        if pipe is not None and not pipe.closed:
+            pipe.close()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=2)
     return returncode, "".join(output)
+
+
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            process.terminate()
+        else:
+            os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=5)
+    except Exception:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+        except Exception:
+            pass
 
 
 def should_repair_cocoapods_specs(output: str) -> bool:
@@ -379,6 +452,12 @@ def should_repair_cocoapods_specs(output: str) -> bool:
     if any(pattern in output for pattern in COCOAPODS_SPECS_REPAIR_PATTERNS):
         return True
     return "CocoaPods" in output and "pod repo update" in output
+
+
+def should_treat_output_as_failure(output: str) -> bool:
+    if not output:
+        return False
+    return any(pattern in output for pattern in COMMAND_OUTPUT_FAILURE_PATTERNS)
 
 
 def repair_cocoapods_specs(cwd: Path, env: dict[str, str], dry_run: bool) -> None:
@@ -605,6 +684,7 @@ def run_target(
         require_target_tools(config, target_name, target)
 
     env = build_env(config, stamp, extra_env)
+    env.update(target_env_values(target, env))
     print(f"\n==> {config.display_name}: {target_name} ({stamp.full})")
 
     cwd = resolve_path(target.get("cwd", "."), config.repo_root)
@@ -696,6 +776,23 @@ def run_git(args: list[str], cwd: Path, dry_run: bool = False) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True)
 
 
+def try_run_git(args: list[str], cwd: Path, dry_run: bool = False) -> bool:
+    display = display_command("git", args)
+    print(f"+ {display}", flush=True)
+    if dry_run:
+        return True
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if result.stdout:
+        print(result.stdout, end="", flush=True)
+    return result.returncode == 0
+
+
 def remote_branch_exists(repo_root: Path, remote: str, branch: str) -> bool:
     ref = f"refs/remotes/{remote}/{branch}"
     result = subprocess.run(
@@ -722,7 +819,8 @@ def sync_repo_before_build(repo_root: Path, dry_run: bool = False) -> None:
         repo_root,
     )
     if upstream:
-        run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run)
+        if not try_run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run):
+            print("skip: git pull could not fast-forward; continuing with current checkout")
     else:
         origin = git_try_output(["remote", "get-url", "origin"], repo_root)
         if not origin:
@@ -735,11 +833,13 @@ def sync_repo_before_build(repo_root: Path, dry_run: bool = False) -> None:
                 print("update: detached HEAD has no upstream; fetching origin")
             run_git(["fetch", "--recurse-submodules", "origin"], repo_root, dry_run)
             if branch and remote_branch_exists(repo_root, "origin", branch):
-                run_git(
+                ok = try_run_git(
                     ["pull", "--ff-only", "--recurse-submodules", "origin", branch],
                     repo_root,
                     dry_run,
                 )
+                if not ok:
+                    print("skip: git pull could not fast-forward; continuing with current checkout")
             elif branch:
                 print(f"skip: origin/{branch} does not exist; continuing without pull")
     run_git(["submodule", "update", "--init", "--recursive"], repo_root, dry_run)

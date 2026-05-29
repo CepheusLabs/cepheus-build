@@ -16,6 +16,7 @@ mobile = ["ios", "android"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
 [targets.web]
+enabled = false
 hosts = ["linux", "macos", "windows"]
 cwd = "."
 commands = [
@@ -28,6 +29,7 @@ tools = ["pwsh", "flutter", "flutter_rust_bridge_codegen", "wasm-pack", "rustup"
 hosts = ["linux", "macos"]
 cwd = "."
 commands = [
+  "rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android",
   "cd core/pd-ffi && cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -t x86 -o \"$CBUILD_APP_DIR/android/app/src/main/jniLibs\" build --release",
   "cd \"$CBUILD_APP_DIR\" && flutter pub get",
   "cd \"$CBUILD_APP_DIR\" && flutter build apk --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
@@ -37,7 +39,7 @@ artifacts = [
   "app/build/app/outputs/flutter-apk/app-release.apk",
   "app/build/app/outputs/bundle/release/app-release.aab",
 ]
-tools = ["cargo", "cargo-ndk", "flutter"]
+tools = ["cargo", "cargo-ndk", "flutter", "rustup"]
 
 [targets.ios]
 hosts = ["macos"]

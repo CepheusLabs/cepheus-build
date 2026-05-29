@@ -39,6 +39,7 @@ install = { macos = ["brew install --cask docker"], windows = ["winget install -
 [tools.docker-daemon]
 hint = "start Docker Desktop, Docker Engine, Colima, OrbStack, or another Docker-compatible daemon; the Docker CLI alone is not enough"
 check = { linux = ["docker info >/dev/null 2>&1"], macos = ["docker info >/dev/null 2>&1"], windows = ["docker info >NUL 2>&1"] }
+install = { macos = ["open -a Docker || true; for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; docker info"] }
 
 [tools.flutter]
 hint = "install Flutter and make sure flutter is on PATH"
@@ -55,7 +56,7 @@ hint = "install Inno Setup and make sure iscc is on PATH"
 
 [tools.pwsh]
 hint = "install PowerShell and make sure pwsh is on PATH"
-install = { macos = ["brew install --cask powershell"] }
+install = { macos = ["brew install powershell"] }
 
 [tools.powershell]
 hint = "PowerShell is built into Windows; otherwise install PowerShell and make sure powershell is on PATH"

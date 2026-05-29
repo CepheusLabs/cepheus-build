@@ -19,7 +19,7 @@ all = ["macos", "windows", "linux"]
 hosts = ["macos"]
 cwd = "."
 commands = [
-  "scripts/build.sh macos --release",
+  "bash scripts/build.sh macos --release",
 ]
 artifacts = ["app/build/macos/Build/Products/Release/deckhand.app"]
 tools = ["bash", "go", "flutter", "xcodebuild", "pod"]
@@ -28,8 +28,8 @@ tools = ["bash", "go", "flutter", "xcodebuild", "pod"]
 hosts = ["macos"]
 cwd = "."
 commands = [
-  "scripts/build.sh macos --release",
-  "packaging/macos/build_dmg.sh \"$CBUILD_VERSION\"",
+  "bash scripts/build.sh macos --release",
+  "bash packaging/macos/build_dmg.sh \"$CBUILD_VERSION\"",
 ]
 artifacts = ["packaging/macos/dist/*.dmg"]
 tools = ["bash", "go", "flutter", "xcodebuild", "pod", "codesign"]
@@ -57,7 +57,7 @@ tools = ["bash", "go", "flutter", "windres", "iscc"]
 hosts = ["linux"]
 cwd = "."
 commands = [
-  "scripts/build.sh linux --release",
+  "bash scripts/build.sh linux --release",
 ]
 artifacts = ["app/build/linux/x64/release/bundle"]
 tools = ["bash", "go", "flutter"]
@@ -66,8 +66,8 @@ tools = ["bash", "go", "flutter"]
 hosts = ["linux"]
 cwd = "."
 commands = [
-  "scripts/build.sh linux --release",
-  "packaging/linux/build_appimage.sh \"$CBUILD_VERSION\"",
+  "bash scripts/build.sh linux --release",
+  "bash packaging/linux/build_appimage.sh \"$CBUILD_VERSION\"",
 ]
 artifacts = ["packaging/linux/dist/*.AppImage"]
 tools = ["bash", "go", "flutter", "appimagetool"]

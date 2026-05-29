@@ -18,6 +18,7 @@ stores = ["ios", "macos", "android", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
 [targets.web]
+enabled = false
 hosts = ["linux", "macos", "windows"]
 flutter = "web"
 flutter_args = ["--no-wasm-dry-run"]
@@ -28,7 +29,8 @@ tools = ["flutter"]
 hosts = ["linux", "macos"]
 cwd = "."
 commands = [
-  "scripts/build-android-native.sh",
+  "rustup target add aarch64-linux-android x86_64-linux-android",
+  "bash scripts/build-android-native.sh",
   "cd \"$CBUILD_APP_DIR\" && flutter pub get",
   "cd \"$CBUILD_APP_DIR\" && flutter build apk --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
   "cd \"$CBUILD_APP_DIR\" && flutter build appbundle --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
@@ -37,7 +39,7 @@ artifacts = [
   "apps/colorwake_studio/build/app/outputs/flutter-apk/app-release.apk",
   "apps/colorwake_studio/build/app/outputs/bundle/release/app-release.aab",
 ]
-tools = ["cargo", "cargo-ndk", "flutter"]
+tools = ["cargo", "cargo-ndk", "flutter", "rustup"]
 
 [targets.ios]
 hosts = ["macos"]
