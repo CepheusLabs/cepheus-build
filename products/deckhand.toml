@@ -22,7 +22,7 @@ commands = [
   "scripts/build.sh macos --release",
 ]
 artifacts = ["app/build/macos/Build/Products/Release/deckhand.app"]
-tools = ["bash", "go", "flutter", "xcodebuild"]
+tools = ["bash", "go", "flutter", "xcodebuild", "pod"]
 
 [targets.macos-dmg]
 hosts = ["macos"]
@@ -32,7 +32,7 @@ commands = [
   "packaging/macos/build_dmg.sh \"$CBUILD_VERSION\"",
 ]
 artifacts = ["packaging/macos/dist/*.dmg"]
-tools = ["bash", "go", "flutter", "xcodebuild", "codesign"]
+tools = ["bash", "go", "flutter", "xcodebuild", "pod", "codesign"]
 
 [targets.windows]
 hosts = ["windows"]

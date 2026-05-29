@@ -61,7 +61,7 @@ commands = [
   "cd \"$CBUILD_APP_DIR\" && flutter build macos --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
 ]
 artifacts = ["app/build/macos/Build/Products/Release/Anvil.app"]
-tools = ["cargo", "flutter", "xcodebuild"]
+tools = ["cargo", "flutter", "xcodebuild", "pod"]
 
 [targets.windows]
 hosts = ["windows"]

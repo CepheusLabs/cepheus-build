@@ -60,6 +60,10 @@ install = { macos = ["brew install --cask powershell"] }
 [tools.powershell]
 hint = "PowerShell is built into Windows; otherwise install PowerShell and make sure powershell is on PATH"
 
+[tools.pod]
+hint = "install CocoaPods with: brew install cocoapods"
+install = { macos = ["brew install cocoapods"] }
+
 [tools.rustup]
 hint = "install Rust with rustup"
 

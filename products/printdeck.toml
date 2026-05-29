@@ -58,7 +58,7 @@ commands = [
   "make macos-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
 artifacts = ["frontend/build/macos/Build/Products/Release/printdeck.app"]
-tools = ["flutter", "xcodebuild", "make"]
+tools = ["flutter", "xcodebuild", "pod", "make"]
 
 [targets.macos-dmg]
 hosts = ["macos"]
@@ -67,7 +67,7 @@ commands = [
   "make macos-dmg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
 artifacts = ["frontend/build/macos/printdeck-*-macos.dmg"]
-tools = ["flutter", "xcodebuild", "create-dmg", "make"]
+tools = ["flutter", "xcodebuild", "pod", "create-dmg", "make"]
 
 [targets.macos-appstore]
 hosts = ["macos"]
@@ -76,7 +76,7 @@ commands = [
   "make macos-mas-pkg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
 artifacts = ["frontend/build/macos/printdeck-*-mas.pkg"]
-tools = ["flutter", "xcodebuild", "productbuild", "make"]
+tools = ["flutter", "xcodebuild", "pod", "productbuild", "make"]
 
 [targets.windows]
 hosts = ["windows"]

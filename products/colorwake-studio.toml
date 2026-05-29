@@ -65,7 +65,7 @@ commands = [
   "/usr/bin/codesign --force --deep --sign - \"$CBUILD_APP_DIR/build/macos/Build/Products/Release/colorwake_studio.app\"",
 ]
 artifacts = ["apps/colorwake_studio/build/macos/Build/Products/Release/colorwake_studio.app"]
-tools = ["cargo", "flutter", "xcodebuild", "lipo", "install_name_tool", "codesign"]
+tools = ["cargo", "flutter", "xcodebuild", "pod", "lipo", "install_name_tool", "codesign"]
 
 [targets.windows]
 hosts = ["windows"]

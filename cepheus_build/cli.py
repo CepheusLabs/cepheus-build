@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import datetime as dt
 import glob
 import json
@@ -13,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +37,11 @@ HOST_ALIASES = {
 HOST_ORDER = ["linux", "macos", "windows"]
 
 VIRTUAL_TOOLS = {"buildroot"}
+
+COCOAPODS_SPECS_REPAIR_PATTERNS = [
+    "CocoaPods's specs repository is too out-of-date",
+    "CocoaPods could not find compatible versions for pod",
+]
 
 
 @dataclass(frozen=True)
@@ -216,6 +223,22 @@ def git_output(args: list[str], cwd: Path) -> str:
     return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
 
 
+def git_try_output(args: list[str], cwd: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def compute_stamp(config: ProductConfig) -> Stamp:
     env_prefix = str(config.version.get("env_prefix") or config.slug).upper().replace("-", "_")
     version_env = os.getenv(f"{env_prefix}_BUILD_NAME") or os.getenv("CBUILD_VERSION")
@@ -291,12 +314,77 @@ def run_command(
     cwd: Path,
     env: dict[str, str],
     dry_run: bool = False,
+    *,
+    allow_repairs: bool = True,
 ) -> None:
     rendered = os.path.expandvars(command)
     print(f"+ {rendered}", flush=True)
     if dry_run:
         return
-    subprocess.run(rendered, cwd=cwd, env=env, shell=True, check=True)
+    returncode, output = run_shell_streaming(rendered, cwd, env)
+    if returncode == 0:
+        return
+
+    if allow_repairs and should_repair_cocoapods_specs(output):
+        repair_cocoapods_specs(cwd, env, dry_run)
+        print("repair: retrying failed command after CocoaPods specs update", flush=True)
+        print(f"+ {rendered}", flush=True)
+        returncode, output = run_shell_streaming(rendered, cwd, env)
+        if returncode == 0:
+            return
+
+    raise subprocess.CalledProcessError(returncode, rendered, output=output)
+
+
+def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[int, str]:
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    output: deque[str] = deque(maxlen=1200)
+    output_lock = threading.Lock()
+
+    def stream(pipe: Any, destination: Any) -> None:
+        try:
+            for line in iter(pipe.readline, ""):
+                with output_lock:
+                    output.append(line)
+                print(line, end="", file=destination, flush=True)
+        finally:
+            pipe.close()
+
+    threads = []
+    if process.stdout is not None:
+        threads.append(threading.Thread(target=stream, args=(process.stdout, sys.stdout)))
+    if process.stderr is not None:
+        threads.append(threading.Thread(target=stream, args=(process.stderr, sys.stderr)))
+    for thread in threads:
+        thread.start()
+
+    returncode = process.wait()
+    for thread in threads:
+        thread.join()
+    return returncode, "".join(output)
+
+
+def should_repair_cocoapods_specs(output: str) -> bool:
+    if not output:
+        return False
+    if any(pattern in output for pattern in COCOAPODS_SPECS_REPAIR_PATTERNS):
+        return True
+    return "CocoaPods" in output and "pod repo update" in output
+
+
+def repair_cocoapods_specs(cwd: Path, env: dict[str, str], dry_run: bool) -> None:
+    command = "pod repo update"
+    print("repair: CocoaPods specs repo is out-of-date; running pod repo update", flush=True)
+    run_command(command, cwd, env, dry_run, allow_repairs=False)
 
 
 def ensure_host(target_name: str, target: dict[str, Any], skip_unsupported: bool) -> bool:
@@ -608,6 +696,15 @@ def run_git(args: list[str], cwd: Path, dry_run: bool = False) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True)
 
 
+def remote_branch_exists(repo_root: Path, remote: str, branch: str) -> bool:
+    ref = f"refs/remotes/{remote}/{branch}"
+    result = subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", ref],
+        cwd=repo_root,
+    )
+    return result.returncode == 0
+
+
 def sync_repo_before_build(repo_root: Path, dry_run: bool = False) -> None:
     if not repo_root.exists():
         raise BuildError(f"repo_root does not exist: {repo_root}")
@@ -620,7 +717,31 @@ def sync_repo_before_build(repo_root: Path, dry_run: bool = False) -> None:
         print(f"skip: {repo_root} is not a git worktree")
         return
     print(f"update: {repo_root}", flush=True)
-    run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run)
+    upstream = git_try_output(
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        repo_root,
+    )
+    if upstream:
+        run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run)
+    else:
+        origin = git_try_output(["remote", "get-url", "origin"], repo_root)
+        if not origin:
+            print("skip: no origin remote configured; continuing without pull")
+        else:
+            branch = git_try_output(["branch", "--show-current"], repo_root)
+            if branch:
+                print(f"update: branch '{branch}' has no upstream; fetching origin")
+            else:
+                print("update: detached HEAD has no upstream; fetching origin")
+            run_git(["fetch", "--recurse-submodules", "origin"], repo_root, dry_run)
+            if branch and remote_branch_exists(repo_root, "origin", branch):
+                run_git(
+                    ["pull", "--ff-only", "--recurse-submodules", "origin", branch],
+                    repo_root,
+                    dry_run,
+                )
+            elif branch:
+                print(f"skip: origin/{branch} does not exist; continuing without pull")
     run_git(["submodule", "update", "--init", "--recursive"], repo_root, dry_run)
 
 
