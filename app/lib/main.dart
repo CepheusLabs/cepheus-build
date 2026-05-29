@@ -152,11 +152,11 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   BuildAction? _runningAction;
   DateTime? _startedAt;
   String _liveOutput = '';
+  List<DateTime> _liveLineTimes = const [];
   String? _message;
   bool _loading = true;
   bool _showLiveOutput = true;
   _LogFilter _logFilter = _LogFilter.all;
-  bool _showRawLog = false;
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
@@ -621,6 +621,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       setState(() {
         _message = 'Build script not found';
         _liveOutput = 'Missing ${command.executable}\n';
+        _liveLineTimes = [DateTime.now()];
         _showLiveOutput = true;
       });
       return;
@@ -628,11 +629,13 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
     final startedAt = DateTime.now();
     final buffer = StringBuffer()..writeln(command.display);
+    var lineTimes = <DateTime>[startedAt];
 
     setState(() {
       _runningAction = action;
       _startedAt = startedAt;
       _liveOutput = buffer.toString();
+      _liveLineTimes = lineTimes;
       _showLiveOutput = true;
       _message = null;
     });
@@ -648,9 +651,11 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
       void append(String chunk) {
         buffer.write(chunk);
+        lineTimes = _syncLogLineTimes(buffer.toString(), lineTimes);
         if (!mounted) return;
         setState(() {
           _liveOutput = buffer.toString();
+          _liveLineTimes = lineTimes;
         });
       }
 
@@ -668,6 +673,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       final duration = DateTime.now().difference(startedAt);
       buffer.writeln();
       buffer.writeln('exit code $exitCode');
+      lineTimes = _syncLogLineTimes(buffer.toString(), lineTimes);
 
       final entry = BuildHistoryEntry(
         id: startedAt.microsecondsSinceEpoch.toString(),
@@ -685,6 +691,9 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         durationMs: duration.inMilliseconds,
         exitCode: exitCode,
         output: _truncateOutput(buffer.toString()),
+        outputLineTimes: lineTimes
+            .map((timestamp) => timestamp.toIso8601String())
+            .toList(),
       );
 
       if (!mounted) return;
@@ -693,6 +702,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         _runningAction = null;
         _startedAt = null;
         _liveOutput = entry.output;
+        _liveLineTimes = lineTimes;
         _selectedHistory = entry;
         _history = [entry, ..._history].take(_maxHistoryEntries).toList();
         _message = exitCode == 0 ? 'Run completed' : 'Run failed';
@@ -713,6 +723,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         _startedAt = null;
         _message = 'Run could not start';
         _liveOutput = '${buffer}error: $error\n';
+        _liveLineTimes = _syncLogLineTimes(_liveOutput, lineTimes);
       });
     }
   }
@@ -723,6 +734,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
     setState(() {
       _message = 'Cancel requested';
       _liveOutput = '$_liveOutput\ncancel requested\n';
+      _liveLineTimes = _syncLogLineTimes(_liveOutput, _liveLineTimes);
     });
     unawaited(_terminateProcessTree(process.pid));
   }
@@ -745,6 +757,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       setState(() {
         _message = 'Cancel forced';
         _liveOutput = '$_liveOutput\ncancel forced\n';
+        _liveLineTimes = _syncLogLineTimes(_liveOutput, _liveLineTimes);
       });
     } on Object catch (error) {
       if (!Platform.isWindows) {
@@ -754,6 +767,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       setState(() {
         _message = 'Cancel signal failed';
         _liveOutput = '$_liveOutput\ncancel signal failed: $error\n';
+        _liveLineTimes = _syncLogLineTimes(_liveOutput, _liveLineTimes);
       });
     }
   }
@@ -919,6 +933,24 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
   String get _visibleOutput {
     if (_showLiveOutput || _selectedHistory == null) return _liveOutput;
     return _selectedHistory!.output;
+  }
+
+  List<String> get _visibleOutputLineTimes {
+    if (_showLiveOutput || _selectedHistory == null) {
+      return _liveLineTimes
+          .map((timestamp) => timestamp.toIso8601String())
+          .toList();
+    }
+    final stored = _selectedHistory!.outputLineTimes;
+    if (stored.isNotEmpty) return stored;
+    final fallbackCount = _selectedHistory!.output
+        .split(RegExp(r'\r?\n'))
+        .where((line) => line.isNotEmpty)
+        .length;
+    return List.filled(
+      fallbackCount,
+      _selectedHistory!.startedAt.toIso8601String(),
+    );
   }
 
   @override
@@ -1412,15 +1444,15 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
         : _selectedHistory == null
         ? 'no selected run'
         : '${_selectedHistory!.product} ${_entryScope(_selectedHistory!)}';
-    final allEntries = _logEntries(_visibleOutput);
+    final allEntries = _logEntries(
+      _visibleOutput,
+      lineTimes: _visibleOutputLineTimes,
+    );
     final visibleEntries = allEntries
         .where((entry) => _logFilter.accepts(entry))
         .toList();
     final visibleText = _logTextForEntries(visibleEntries);
-    final fullText = _visibleOutput;
-    final rawDisplayText = _logFilter == _LogFilter.all
-        ? fullText
-        : visibleText;
+    final fullText = _logTextForEntries(allEntries);
 
     return ClPanel(
       fillParent: true,
@@ -1458,8 +1490,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
               visibleCount: visibleEntries.length,
               totalCount: allEntries.length,
               onChanged: (value) => setState(() => _logFilter = value),
-              rawMode: _showRawLog,
-              onRawModeChanged: (value) => setState(() => _showRawLog = value),
               onCopyVisible: visibleText.isEmpty
                   ? null
                   : () => unawaited(_copyLogText(visibleText, 'Visible log')),
@@ -1469,24 +1499,16 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
             ),
           ),
           Expanded(
-            child: _showRawLog
-                ? _SelectableRawLogView(
-                    text: rawDisplayText,
-                    emptyMessage: allEntries.isEmpty
-                        ? 'No output yet. Run plan, matrix, dry-run, or build.'
-                        : 'No lines match ${_logFilter.label}.',
-                    controller: _logScrollController,
-                  )
-                : ClLogView(
-                    controller: _logScrollController,
-                    entries: visibleEntries,
-                    emptyMessage: allEntries.isEmpty
-                        ? 'No output yet. Run plan, matrix, dry-run, or build.'
-                        : 'No lines match ${_logFilter.label}.',
-                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
-                    timeColumnWidth: 42,
-                    tagColumnWidth: 72,
-                  ),
+            child: ClLogView(
+              controller: _logScrollController,
+              entries: visibleEntries,
+              emptyMessage: allEntries.isEmpty
+                  ? 'No output yet. Run plan, matrix, dry-run, or build.'
+                  : 'No lines match ${_logFilter.label}.',
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
+              timeColumnWidth: 72,
+              tagColumnWidth: 72,
+            ),
           ),
         ],
       ),
@@ -1572,8 +1594,6 @@ class _LogFilterBar extends StatelessWidget {
     required this.visibleCount,
     required this.totalCount,
     required this.onChanged,
-    required this.rawMode,
-    required this.onRawModeChanged,
     required this.onCopyVisible,
     required this.onCopyAll,
   });
@@ -1582,8 +1602,6 @@ class _LogFilterBar extends StatelessWidget {
   final int visibleCount;
   final int totalCount;
   final ValueChanged<_LogFilter> onChanged;
-  final bool rawMode;
-  final ValueChanged<bool> onRawModeChanged;
   final VoidCallback? onCopyVisible;
   final VoidCallback? onCopyAll;
 
@@ -1642,14 +1660,6 @@ class _LogFilterBar extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: 'Use selectable raw text',
-          child: ClFilterPill(
-            active: rawMode,
-            onTap: () => onRawModeChanged(!rawMode),
-            label: 'Text',
-          ),
-        ),
-        Tooltip(
           message: 'Copy filtered output',
           child: ClButton.iconOnly(
             icon: ClIcons.copy,
@@ -1659,7 +1669,7 @@ class _LogFilterBar extends StatelessWidget {
           ),
         ),
         Tooltip(
-          message: 'Copy full raw output',
+          message: 'Copy full output',
           child: ClButton.iconOnly(
             icon: ClIcons.copy,
             size: ClButtonSize.sm,
@@ -1667,46 +1677,6 @@ class _LogFilterBar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SelectableRawLogView extends StatelessWidget {
-  const _SelectableRawLogView({
-    required this.text,
-    required this.emptyMessage,
-    required this.controller,
-  });
-
-  final String text;
-  final String emptyMessage;
-  final ScrollController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brandColors;
-    if (text.isEmpty) {
-      return Center(
-        child: Text(
-          emptyMessage,
-          style: context.dataSmall.copyWith(color: brand.ink3),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-    return Scrollbar(
-      controller: controller,
-      child: SingleChildScrollView(
-        controller: controller,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-        child: SizedBox(
-          width: double.infinity,
-          child: SelectableText(
-            text,
-            style: context.dataTiny.copyWith(color: brand.ink2, height: 1.6),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1848,13 +1818,17 @@ class _CommandSpec {
   final bool validateExecutablePath;
 }
 
-List<ClLogEntry> _logEntries(String output) {
+List<ClLogEntry> _logEntries(
+  String output, {
+  List<String> lineTimes = const [],
+}) {
   final lines = output.split(RegExp(r'\r?\n'));
+  var visibleIndex = 0;
   return [
     for (var i = 0; i < lines.length; i++)
       if (lines[i].isNotEmpty)
         ClLogEntry(
-          time: (i + 1).toString().padLeft(3, '0'),
+          time: _logTimestampForIndex(lineTimes, visibleIndex++),
           tag: _tagFor(lines[i]),
           message: lines[i],
           tone: _toneFor(lines[i]),
@@ -1863,7 +1837,35 @@ List<ClLogEntry> _logEntries(String output) {
 }
 
 String _logTextForEntries(List<ClLogEntry> entries) {
-  return entries.map((entry) => entry.message).join('\n');
+  return entries
+      .map((entry) => '${entry.time} ${entry.tag} ${entry.message}')
+      .join('\n');
+}
+
+List<DateTime> _syncLogLineTimes(
+  String output,
+  List<DateTime> current, {
+  DateTime? timestamp,
+}) {
+  final lineCount = output
+      .split(RegExp(r'\r?\n'))
+      .where((line) => line.isNotEmpty)
+      .length;
+  if (current.length == lineCount) return current;
+  final next = current.take(lineCount).toList();
+  while (next.length < lineCount) {
+    next.add(timestamp ?? DateTime.now());
+  }
+  return next;
+}
+
+String _logTimestampForIndex(List<String> lineTimes, int index) {
+  if (index < 0 || index >= lineTimes.length) return '--:--:--';
+  final timestamp = DateTime.tryParse(lineTimes[index]);
+  if (timestamp == null) return '--:--:--';
+  final local = timestamp.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
 }
 
 String _tagFor(String line) {

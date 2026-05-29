@@ -183,6 +183,7 @@ class BuildHistoryEntry {
     required this.durationMs,
     required this.exitCode,
     required this.output,
+    required this.outputLineTimes,
   });
 
   factory BuildHistoryEntry.fromJson(Map<String, dynamic> json) {
@@ -211,6 +212,11 @@ class BuildHistoryEntry {
           : 0,
       exitCode: json['exitCode'] is num ? (json['exitCode'] as num).round() : 1,
       output: _string(json['output'], ''),
+      outputLineTimes: json['outputLineTimes'] is List
+          ? (json['outputLineTimes'] as List)
+                .map((value) => value.toString())
+                .toList()
+          : const [],
     );
   }
 
@@ -229,6 +235,7 @@ class BuildHistoryEntry {
   final int durationMs;
   final int exitCode;
   final String output;
+  final List<String> outputLineTimes;
 
   bool get succeeded => exitCode == 0;
 
@@ -263,6 +270,7 @@ class BuildHistoryEntry {
       'durationMs': durationMs,
       'exitCode': exitCode,
       'output': output,
+      'outputLineTimes': outputLineTimes,
     };
   }
 }
