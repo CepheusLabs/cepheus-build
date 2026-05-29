@@ -32,6 +32,14 @@ hint = "install LLVM/Clang and make sure clang++ is on PATH"
 hint = "install with: brew install create-dmg"
 install = { macos = ["brew install create-dmg"] }
 
+[tools.docker]
+hint = "install Docker CLI plus a Docker-compatible engine and make sure docker is on PATH"
+install = { macos = ["brew install --cask docker"], windows = ["winget install -e --id Docker.DockerDesktop"] }
+
+[tools.docker-daemon]
+hint = "start Docker Desktop, Docker Engine, Colima, OrbStack, or another Docker-compatible daemon; the Docker CLI alone is not enough"
+check = { linux = ["docker info >/dev/null 2>&1"], macos = ["docker info >/dev/null 2>&1"], windows = ["docker info >NUL 2>&1"] }
+
 [tools.flutter]
 hint = "install Flutter and make sure flutter is on PATH"
 
@@ -48,6 +56,9 @@ hint = "install Inno Setup and make sure iscc is on PATH"
 [tools.pwsh]
 hint = "install PowerShell and make sure pwsh is on PATH"
 install = { macos = ["brew install --cask powershell"] }
+
+[tools.powershell]
+hint = "PowerShell is built into Windows; otherwise install PowerShell and make sure powershell is on PATH"
 
 [tools.rustup]
 hint = "install Rust with rustup"

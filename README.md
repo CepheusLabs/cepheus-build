@@ -50,6 +50,12 @@ missing tools before starting the build; Dry Run keeps to preview output only.
 The local build environment includes common user tool directories such as
 `~/.cargo/bin`, so tools installed during dependency setup are available to
 later targets in the same run.
+Real local builds also update the product checkout first with a normal
+fast-forward-only `git pull` and recursive submodule update. Dry Run does not
+mutate the checkout.
+Foundry OS Docker targets need a running Docker-compatible engine. Docker
+Desktop is not required if `docker info` works through Docker Engine, Colima,
+OrbStack, Rancher Desktop, or another compatible daemon.
 
 From inside an app repo that vendors this as `shared/cepheus-build`:
 

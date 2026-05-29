@@ -324,10 +324,29 @@ def target_allowed_hosts(target: dict[str, Any]) -> set[str]:
 def tool_status(tool: str) -> tuple[bool, str]:
     if tool in VIRTUAL_TOOLS:
         return True, "managed by product command/workflow setup"
-    path = shutil.which(tool)
+    config = tool_config(tool)
+    check_commands = host_list(config.get("check"))
+    if check_commands:
+        result = subprocess.run(
+            check_commands[0],
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode != 0:
+            hint = str(config.get("hint") or "")
+            detail = result.stderr.strip() or result.stdout.strip() or "check failed"
+            if hint:
+                detail = f"{detail} ({hint})"
+            return False, detail
+        path = shutil.which(str(config.get("binary") or tool))
+        return True, path or "ok"
+
+    path = shutil.which(str(config.get("binary") or tool))
     if path:
         return True, path
-    hint = str(tool_config(tool).get("hint") or "")
+    hint = str(config.get("hint") or "")
     detail = "missing"
     if hint:
         detail = f"{detail} ({hint})"
@@ -352,7 +371,7 @@ def collect_target_tools(
         target = config.target(target_name)
         if not ensure_host(target_name, target, skip_unsupported=skip_unsupported):
             continue
-        tools.update(target.get("tools", []) or [])
+        tools.update(host_list(target.get("tools")))
     return tools
 
 
@@ -405,7 +424,7 @@ def install_deps_for_targets(
 
 def require_target_tools(config: ProductConfig, target_name: str, target: dict[str, Any]) -> None:
     tools = set(config.data.get("tools", {}).get("required", []) or [])
-    tools.update(target.get("tools", []) or [])
+    tools.update(host_list(target.get("tools")))
     missing: list[str] = []
     for tool in sorted(tools):
         ok, detail = tool_status(tool)
@@ -500,10 +519,10 @@ def run_target(
     print(f"\n==> {config.display_name}: {target_name} ({stamp.full})")
 
     cwd = resolve_path(target.get("cwd", "."), config.repo_root)
-    for command in target.get("pre", []) or []:
+    for command in host_list(target.get("pre")):
         run_command(str(command), cwd, env, dry_run)
 
-    commands = target.get("commands", []) or []
+    commands = host_list(target.get("commands"))
     if commands:
         for command in commands:
             run_command(str(command), cwd, env, dry_run)
@@ -513,7 +532,7 @@ def run_target(
         command = flutter_build_command(config, target_name, target, stamp, env, build_mode, extra_args)
         run_command(command, config.app_dir, env, dry_run)
 
-    for command in target.get("post", []) or []:
+    for command in host_list(target.get("post")):
         run_command(str(command), cwd, env, dry_run)
 
 
@@ -571,6 +590,37 @@ def string_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value]
     return []
+
+
+def host_list(value: Any, host: str | None = None) -> list[str]:
+    if isinstance(value, dict):
+        host_name = host or current_host()
+        return string_list(value.get(host_name) or value.get("default"))
+    return string_list(value)
+
+
+def run_git(args: list[str], cwd: Path, dry_run: bool = False) -> None:
+    display = display_command("git", args)
+    print(f"+ {display}", flush=True)
+    if dry_run:
+        return
+    subprocess.run(["git", *args], cwd=cwd, check=True)
+
+
+def sync_repo_before_build(repo_root: Path, dry_run: bool = False) -> None:
+    if not repo_root.exists():
+        raise BuildError(f"repo_root does not exist: {repo_root}")
+    try:
+        inside = git_output(["rev-parse", "--is-inside-work-tree"], repo_root)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(f"skip: {repo_root} is not a git worktree")
+        return
+    if inside.strip().lower() != "true":
+        print(f"skip: {repo_root} is not a git worktree")
+        return
+    print(f"update: {repo_root}", flush=True)
+    run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run)
+    run_git(["submodule", "update", "--init", "--recursive"], repo_root, dry_run)
 
 
 def runner_profile_names() -> list[str]:
@@ -745,7 +795,7 @@ def build_ci_matrix(
         tools = {
             str(tool)
             for target_name in targets
-            for tool in (targets_by_name[target_name].get("tools", []) or [])
+            for tool in host_list(targets_by_name[target_name].get("tools"), host)
         }
         rows.append(
             {
@@ -836,7 +886,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     tools = set(config.data.get("tools", {}).get("required", []) or [])
     for target_name in targets:
         target = config.target(target_name)
-        tools.update(target.get("tools", []) or [])
+        tools.update(host_list(target.get("tools")))
         if not ensure_host(target_name, target, skip_unsupported=True):
             continue
     for tool in sorted(tools):
@@ -871,6 +921,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         return cmd_github_build(config, args)
 
     targets = config.expand_targets(args.targets)
+    if not args.dry_run:
+        sync_repo_before_build(config.repo_root)
     stamp = compute_stamp(config)
     extra_env = buildroot_env(args)
     failures: list[tuple[str, str]] = []
@@ -960,7 +1012,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             if not env.get(str(required)):
                 raise BuildError(f"Missing required environment variable for {args.store}: {required}")
     cwd = resolve_path(store.get("cwd", "."), config.repo_root)
-    for command in store.get("commands", []) or []:
+    for command in host_list(store.get("commands")):
         run_command(str(command), cwd, env, args.dry_run)
     return 0
 
@@ -995,10 +1047,12 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
             path=config_path,
             data=load_toml(config_path),
         )
-        stamp = compute_stamp(config)
         extra_env = buildroot_env(args)
         print(f"\n## {config.display_name} ({product_name})")
         try:
+            if not args.dry_run:
+                sync_repo_before_build(config.repo_root)
+            stamp = compute_stamp(config)
             targets = config.expand_targets(args.targets or ["desktop"])
             for target in targets:
                 target_config = config.target(target)

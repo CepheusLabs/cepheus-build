@@ -15,9 +15,9 @@ quality = ["fmt", "clippy", "test"]
 host = ["host-linux", "host-macos", "host-windows"]
 cli = ["cli-linux", "cli-macos", "cli-windows"]
 mcu = ["mcu-rp2040", "mcu-manta-m8p-h723"]
-os = ["os-image", "os-validate", "os-smoke", "os-package", "deckhand-stage-existing"]
+os = ["deckhand-stage"]
 release = ["cli-linux", "cli-macos", "cli-windows", "mcu-rp2040", "mcu-manta-m8p-h723", "deckhand-stage", "os-update-bundle"]
-all = ["fmt", "clippy", "test", "cli-linux", "cli-macos", "cli-windows", "mcu-rp2040", "mcu-manta-m8p-h723", "os-image", "os-package", "deckhand-stage-existing"]
+all = ["fmt", "clippy", "test", "cli-linux", "cli-macos", "cli-windows", "mcu-rp2040", "mcu-manta-m8p-h723", "deckhand-stage"]
 desktop = ["cli-linux", "cli-macos", "cli-windows"]
 
 [targets.fmt]
@@ -139,74 +139,58 @@ artifacts = [
 tools = ["cargo", "rustup"]
 
 [targets.os-configure]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask build-os manta-m8p-cm4 --buildroot-dir "$BR_DIR" --configure-only',
-]
-artifacts = ["target/foundry-os/manta-m8p-cm4/buildroot/.config"]
-tools = ["cargo", "git", "make", "buildroot"]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action configure"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action configure"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action configure"] }
+artifacts = ["target/foundry-os/manta-m8p-cm4/.config"]
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-image]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "rustup target add thumbv7em-none-eabihf",
-  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask build-os manta-m8p-cm4 --buildroot-dir "$BR_DIR"',
-]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action build"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action build"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action build"] }
 artifacts = [
   "target/foundry-os/manta-m8p-cm4/images",
   "target/foundry-os/manta-m8p-cm4/images/foundry-image-manifest.json",
   "target/foundry-os/manta-m8p-cm4/images/deckhand-image-manifest.json",
   "target/foundry-os/manta-m8p-cm4/images/artifact-index.json",
 ]
-tools = ["cargo", "git", "make", "rustup", "buildroot"]
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-validate]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "cargo xtask validate-os manta-m8p-cm4",
-]
-tools = ["cargo"]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action validate"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action validate"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action validate"] }
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-smoke]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "cargo xtask smoke-os manta-m8p-cm4",
-]
-tools = ["cargo"]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action smoke"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action smoke"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action smoke"] }
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-qemu-smoke]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "cargo xtask qemu-smoke-os manta-m8p-cm4",
-]
-tools = ["cargo", "qemu-system-aarch64"]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action qemu-smoke"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action qemu-smoke"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action qemu-smoke"] }
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.os-package]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "cargo xtask package-os manta-m8p-cm4",
-]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action package"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action package"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action package"] }
 artifacts = [
   "target/foundry-os/manta-m8p-cm4/package/foundry-os-manta-m8p-cm4.tar.gz",
   "target/foundry-os/manta-m8p-cm4/package/foundry-os-manta-m8p-cm4.tar.gz.sha256",
 ]
-tools = ["cargo", "tar"]
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.deckhand-stage]
-hosts = ["linux"]
+hosts = ["linux", "macos", "windows"]
 cwd = "."
-commands = [
-  "rustup target add thumbv7em-none-eabihf",
-  'set -eu; BR_PARENT="${RUNNER_TEMP:-$CBUILD_REPO_ROOT/target/cepheus-build}"; BR_DIR="${BUILDROOT_DIR:-$BR_PARENT/buildroot}"; mkdir -p "$(dirname "$BR_DIR")"; if [ ! -d "$BR_DIR" ]; then git clone --depth 1 "${FOUNDRY_BUILDROOT_REPO:-https://github.com/buildroot/buildroot.git}" "$BR_DIR"; fi; if [ -n "${FOUNDRY_BUILDROOT_REF:-}" ]; then git -C "$BR_DIR" fetch --depth 1 origin "$FOUNDRY_BUILDROOT_REF"; git -C "$BR_DIR" checkout FETCH_HEAD; fi; cargo xtask stage-os manta-m8p-cm4 --buildroot-dir "$BR_DIR"',
-]
+commands = { linux = ["scripts/build-os.sh manta-m8p-cm4 --action stage"], macos = ["scripts/build-os.sh manta-m8p-cm4 --action stage"], windows = ["powershell -ExecutionPolicy Bypass -File scripts/build-os.ps1 manta-m8p-cm4 -Action stage"] }
 artifacts = ["target/foundry-os/manta-m8p-cm4/deckhand-stage"]
-tools = ["cargo", "git", "make", "rustup", "tar", "buildroot"]
+tools = { linux = ["bash", "docker", "docker-daemon"], macos = ["bash", "docker", "docker-daemon"], windows = ["powershell", "docker", "docker-daemon"] }
 
 [targets.deckhand-stage-existing]
 hosts = ["linux"]

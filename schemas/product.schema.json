@@ -60,26 +60,14 @@
             "type": "array",
             "items": { "type": "string" }
           },
-          "commands": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "pre": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "post": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
+          "commands": { "$ref": "#/$defs/stringListOrHostMap" },
+          "pre": { "$ref": "#/$defs/stringListOrHostMap" },
+          "post": { "$ref": "#/$defs/stringListOrHostMap" },
           "artifacts": {
             "type": "array",
             "items": { "type": "string" }
           },
-          "tools": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
+          "tools": { "$ref": "#/$defs/stringListOrHostMap" }
         },
         "additionalProperties": true
       }
@@ -99,13 +87,25 @@
             "type": "array",
             "items": { "type": "string" }
           },
-          "commands": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
+          "commands": { "$ref": "#/$defs/stringListOrHostMap" }
         },
         "additionalProperties": true
       }
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "stringListOrHostMap": {
+      "oneOf": [
+        { "$ref": "#/$defs/stringList" },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/stringList" }
+        }
+      ]
     }
   },
   "additionalProperties": true
