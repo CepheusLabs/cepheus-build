@@ -140,13 +140,6 @@ String _themeModeToString(ThemeMode mode) {
   }
 }
 
-/// Renders build history as CSV for reporting (see [logic.historyToCsv]).
-String _historyToCsv(List<BuildHistoryEntry> entries) =>
-    logic.historyToCsv(entries);
-
-/// Compact filesystem-safe timestamp, e.g. `20260530-142233` (local time).
-String _compactTimestamp(DateTime value) => logic.compactTimestamp(value);
-
 String _timeLabel(DateTime value) {
   final local = value.toLocal();
   String two(int number) => number.toString().padLeft(2, '0');

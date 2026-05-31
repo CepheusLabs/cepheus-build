@@ -193,16 +193,6 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
             title: 'Cepheus Build',
             subtitle: 'Shared builds, local history',
             actions: [
-              Tooltip(
-                message: 'Export history to CSV',
-                child: ClButton.iconOnly(
-                  icon: ClIcons.upload,
-                  size: ClButtonSize.sm,
-                  onPressed: _history.isEmpty || _isRunning
-                      ? null
-                      : () => unawaited(_exportHistoryCsv()),
-                ),
-              ),
               ClThemeToggle(
                 value: widget.themeMode,
                 onChanged: _onThemeToggle,

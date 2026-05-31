@@ -241,30 +241,6 @@ extension _ConsoleActions on _BuildConsoleHomeState {
     }
   }
 
-  Future<void> _exportHistoryCsv() async {
-    if (_history.isEmpty) {
-      _setStateSafe(() => _message = 'No history to export');
-      return;
-    }
-    final csv = _historyToCsv(_history);
-    final file = File(
-      _joinPath(
-        _settings.toolkitRoot,
-        'history',
-        'build-history-${_compactTimestamp(DateTime.now())}.csv',
-      ),
-    );
-    try {
-      await file.parent.create(recursive: true);
-      await file.writeAsString(csv);
-      if (!mounted) return;
-      _setStateSafe(() => _message = 'History exported to ${file.path}');
-    } on Object catch (error) {
-      if (!mounted) return;
-      _setStateSafe(() => _message = 'History export failed: $error');
-    }
-  }
-
   _CommandSpec _commandFor(BuildAction action) {
     // Arg-vector construction is pure and lives in console_logic.dart so it can
     // be unit-tested directly; only platform wrapping + display stay here.
