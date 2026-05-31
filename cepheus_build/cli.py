@@ -19,6 +19,7 @@ from .commands import (
     cmd_local_sweep,
     cmd_plan,
     cmd_stamp,
+    cmd_validate,
 )
 from .errors import BuildError
 from .github import runner_profile_names
@@ -148,6 +149,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_product_args(describe)
     add_json_arg(describe)
     describe.set_defaults(func=cmd_describe)
+
+    validate = sub.add_parser(
+        "validate",
+        help="Validate product config(s) against the product schema.",
+    )
+    add_product_args(validate)
+    add_json_arg(validate)
+    validate.set_defaults(func=cmd_validate)
 
     doctor = sub.add_parser("doctor", help="Check product paths and target tools.")
     add_product_args(doctor)

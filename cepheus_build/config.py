@@ -17,6 +17,7 @@ from .errors import BuildError
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_DIR = TOOL_ROOT / "products"
 TOOL_CONFIG_PATH = TOOL_ROOT / "build.toml"
+PRODUCT_SCHEMA_PATH = TOOL_ROOT / "schemas" / "product.schema.json"
 
 # Auxiliary git invocations (rev-list, etc.) must never hang the CLI.
 GIT_TIMEOUT = 120

@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from .builder import (
     collect_artifacts,
@@ -37,6 +38,7 @@ from .github import (
 )
 from .process import run_command
 from .tools import ensure_host, install_deps_for_targets, tool_status
+from .validation import validate_product_data
 
 
 def product_summary(config: ProductConfig) -> str:
@@ -429,6 +431,47 @@ def cmd_ci_matrix(args: argparse.Namespace) -> int:
 
 def all_product_names() -> list[str]:
     return [path.stem for path in sorted(PRODUCTS_DIR.glob("*.toml"))]
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate product config(s) against schemas/product.schema.json.
+
+    With ``-p``/``--config`` validates that one config; otherwise validates
+    every config in products/. Exits non-zero if any config has errors.
+    """
+    if getattr(args, "product", None) or getattr(args, "config", None):
+        path = find_config(getattr(args, "product", None), getattr(args, "config", None))
+        paths = [path]
+    else:
+        paths = sorted(PRODUCTS_DIR.glob("*.toml"))
+
+    results: list[dict[str, Any]] = []
+    ok = True
+    for path in paths:
+        try:
+            data = load_toml(path)
+            errors = validate_product_data(data)
+        except BuildError as exc:
+            errors = [str(exc)]
+        if errors:
+            ok = False
+        results.append({"config": str(path), "valid": not errors, "errors": errors})
+
+    if getattr(args, "json", False):
+        print(json.dumps({"ok": ok, "results": results}))
+        return 0 if ok else 1
+
+    for result in results:
+        name = Path(result["config"]).stem
+        if result["valid"]:
+            print(f"ok: {name}")
+        else:
+            print(f"invalid: {name}")
+            for err in result["errors"]:
+                print(f"  - {err}")
+    if not ok:
+        print("\nSome configs failed validation.")
+    return 0 if ok else 1
 
 
 def cmd_local_sweep(args: argparse.Namespace) -> int:
