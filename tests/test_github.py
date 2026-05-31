@@ -123,6 +123,22 @@ def _make_ci_config(tmp_path: Path) -> ProductConfig:
         [targets.macos-app]
         hosts = ["macos"]
         tools = {macos = ["flutter", "cargo"], default = ["flutter"]}
+
+        [targets.linux-deb]
+        hosts = ["linux"]
+        tools = ["flutter", "dpkg-deb"]
+
+        [targets.linux-rpm]
+        hosts = ["linux"]
+        tools = ["flutter", "rpmbuild"]
+
+        [targets.linux-flatpak]
+        hosts = ["linux"]
+        tools = ["flutter", "flatpak-builder"]
+
+        [targets.windows-installer]
+        hosts = ["windows"]
+        tools = ["flutter", "iscc"]
     """)
     cfg_path = tmp_path / "ciprod.toml"
     cfg_path.write_text(toml_content)
@@ -184,3 +200,53 @@ class TestBuildCiMatrix:
         matrix = build_ci_matrix(config, ["macos-app"], "github-hosted")
         macos_rows = [r for r in matrix["include"] if r["host"] == "macos"]
         assert "macos-app" in macos_rows[0]["targets"]
+
+    # --- packaging toolchain setup flags -----------------------------------
+
+    def test_setup_deb_true_for_deb_target(self, tmp_path):
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["linux-deb"], "github-hosted")
+        row = next(r for r in matrix["include"] if r["host"] == "linux")
+        assert row["setup_deb"] is True
+        assert row["setup_rpm"] is False
+        assert row["setup_flatpak"] is False
+
+    def test_setup_rpm_true_for_rpm_target(self, tmp_path):
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["linux-rpm"], "github-hosted")
+        row = next(r for r in matrix["include"] if r["host"] == "linux")
+        assert row["setup_rpm"] is True
+        assert row["setup_deb"] is False
+
+    def test_setup_flatpak_true_for_flatpak_target(self, tmp_path):
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["linux-flatpak"], "github-hosted")
+        row = next(r for r in matrix["include"] if r["host"] == "linux")
+        assert row["setup_flatpak"] is True
+
+    def test_setup_innosetup_true_for_windows_installer(self, tmp_path):
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["windows-installer"], "github-hosted")
+        row = next(r for r in matrix["include"] if r["host"] == "windows")
+        assert row["setup_innosetup"] is True
+
+    def test_packaging_flags_absent_by_default(self, tmp_path):
+        # A plain target (no packaging tools) leaves every new flag False, so
+        # CI installs nothing extra for ordinary build rows.
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["web"], "github-hosted")
+        for row in matrix["include"]:
+            assert row["setup_deb"] is False
+            assert row["setup_rpm"] is False
+            assert row["setup_flatpak"] is False
+            assert row["setup_innosetup"] is False
+
+    def test_deb_and_rpm_share_one_linux_row(self, tmp_path):
+        # Both Linux package targets collapse onto the single linux row, which
+        # then advertises both toolchains — mirrors how desktop_packages builds.
+        config = _make_ci_config(tmp_path)
+        matrix = build_ci_matrix(config, ["linux-deb", "linux-rpm"], "github-hosted")
+        linux_rows = [r for r in matrix["include"] if r["host"] == "linux"]
+        assert len(linux_rows) == 1
+        assert linux_rows[0]["setup_deb"] is True
+        assert linux_rows[0]["setup_rpm"] is True

@@ -219,6 +219,18 @@ def build_ci_matrix(
                 "setup_cargo_ndk": "cargo-ndk" in tools,
                 "setup_wasm_pack": "wasm-pack" in tools,
                 "setup_buildroot": "buildroot" in tools,
+                # Native-installer packaging toolchains. None of these ship on
+                # the stock GitHub-hosted images (dpkg-deb is the near-exception:
+                # preinstalled on ubuntu-latest, but self-hosted Debian rebuilds
+                # and non-Debian hosts still need dpkg-dev, so the row advertises
+                # it and the workflow install step is a fast no-op where present).
+                # A row only sets a flag when one of its targets declares the
+                # matching tool, so CI installs Inno Setup / rpm / flatpak only
+                # for the rows that actually build those formats.
+                "setup_deb": "dpkg-deb" in tools,
+                "setup_rpm": "rpmbuild" in tools,
+                "setup_flatpak": bool({"flatpak", "flatpak-builder"} & tools),
+                "setup_innosetup": "iscc" in tools,
             }
         )
     if not rows:

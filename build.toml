@@ -21,6 +21,38 @@ hint = "install appimagetool from the AppImageKit releases"
 [tools.cargo]
 hint = "install Rust with rustup or your package manager"
 
+# ── Linux native-package tooling ────────────────────────────────────────────
+# Used by the desktop_packages targets (linux-deb / linux-rpm / linux-flatpak).
+# dpkg-deb ships with dpkg (preinstalled on Debian/Ubuntu, incl. ubuntu-latest);
+# rpmbuild and flatpak are not, so CI installs them when a matrix row needs them.
+[tools.dpkg-deb]
+hint = "install dpkg (preinstalled on Debian/Ubuntu); on Fedora: dnf install dpkg"
+check = { linux = ["command -v dpkg-deb >/dev/null 2>&1"] }
+install = { linux = ["sudo apt-get update && sudo apt-get install -y dpkg-dev"] }
+
+[tools.rpmbuild]
+hint = "install rpm build tools: apt-get install rpm (Debian/Ubuntu) or dnf install rpm-build (Fedora)"
+check = { linux = ["command -v rpmbuild >/dev/null 2>&1"] }
+install = { linux = ["sudo apt-get update && sudo apt-get install -y rpm"] }
+
+[tools.flatpak]
+hint = "install flatpak from your package manager (apt-get install flatpak)"
+check = { linux = ["command -v flatpak >/dev/null 2>&1"] }
+install = { linux = ["sudo apt-get update && sudo apt-get install -y flatpak"] }
+
+[tools.flatpak-builder]
+hint = "install flatpak-builder (apt-get install flatpak-builder)"
+check = { linux = ["command -v flatpak-builder >/dev/null 2>&1"] }
+install = { linux = ["sudo apt-get update && sudo apt-get install -y flatpak-builder"] }
+
+# GPG signs Linux package-repo metadata (apt Release, rpm headers, flatpak
+# OSTree commits). Signing is env-gated in the helper scripts; the tool only
+# needs to be present when GPG_SIGNING_KEY is set.
+[tools.gpg]
+hint = "install GnuPG (apt-get install gnupg / brew install gnupg)"
+check = { linux = ["command -v gpg >/dev/null 2>&1"], macos = ["command -v gpg >/dev/null 2>&1"] }
+install = { linux = ["sudo apt-get update && sudo apt-get install -y gnupg"], macos = ["brew install gnupg"] }
+
 [tools.cargo-ndk]
 hint = "install with: cargo install cargo-ndk --locked"
 install = ["cargo install cargo-ndk --locked"]
