@@ -31,6 +31,8 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 ./bin/cepheus-build doctor -p <product> <targets> --json    # Same, JSON output
 ./bin/cepheus-build describe --json                         # All products + runner profiles as JSON
 ./bin/cepheus-build describe -p <product> --json            # Full product description as JSON
+./bin/cepheus-build validate                                # Validate all product TOMLs against the schema
+./bin/cepheus-build validate -p <product> --json            # Validate one product, structured output
 ./bin/cepheus-build install-deps -p <product> <targets>     # Install configured tools
 ./bin/cepheus-build build -p <product> <targets>            # Execute local build
 ./bin/cepheus-build build -p <product> <targets> --install-missing-deps   # Install tools first
