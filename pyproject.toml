@@ -5,9 +5,43 @@ description = "Shared build and release orchestration for Cepheus Labs apps"
 requires-python = ">=3.11"
 readme = "README.md"
 
+[project.optional-dependencies]
+deploy = [
+    "google-api-python-client>=2",
+    "google-auth>=2",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
 [project.scripts]
 cepheus-build = "cepheus_build.cli:main"
 
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = [
+    "E501",   # line too long — handled by formatter, not enforced here
+    "UP007",  # use X | Y for type unions — not required for existing code
+    "UP006",  # use type instead of Type — not required for existing code
+    "UP035",  # typing imports deprecated in 3.11 — not required for existing code
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_untyped_defs = false
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

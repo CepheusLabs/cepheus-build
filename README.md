@@ -22,6 +22,7 @@ The first supported product configs are:
 From a checkout beside the app repos:
 
 ```bash
+./bin/cepheus-build --version
 ./bin/cepheus-build list
 ./bin/cepheus-build plan -p printdeck all
 ./bin/cepheus-build doctor -p anvil desktop
@@ -104,10 +105,14 @@ availability.
 Every build receives the same stamp:
 
 - Version: `YY.M.D`, UTC only if a product config opts in.
-- Build number: `git rev-list --count HEAD`.
+- Build number: `git rev-list --count HEAD` run inside the **product's own
+  `repo_root`**, not this repo.
 - Full version: `YY.M.D+BUILD`.
 
-Override with:
+In a `local-sweep`, the build number is computed independently for each
+product from that product's repo, so build numbers can differ across products
+in the same sweep run. To force a shared stamp across products, set the
+override variables explicitly:
 
 ```bash
 CBUILD_VERSION=26.5.28 CBUILD_BUILD_NUMBER=1234 ./bin/cepheus-build build -p printdeck web
@@ -125,11 +130,85 @@ configured commands:
 ```bash
 ./bin/cepheus-build deploy -p printdeck google_play
 ./bin/cepheus-build deploy -p colorwake-studio testflight_ios
+./bin/cepheus-build deploy -p deckhand msstore --dry-run
 ```
+
+`--dry-run` on `deploy` does not upload to the store. The CLI sets the
+`CBUILD_DRY_RUN=1` environment variable so that deploy modules (such as the
+Google Play uploader) also skip real API calls. This is the safe way to verify
+lane config before a real release.
 
 Store support is deliberately opt-in per product. A disabled store means the
 product can build the artifact, but the app listing, package identity, signing
 assets, or release policy is not ready yet.
+
+## Introspection
+
+Use `describe` to get machine-readable JSON about products and runner profiles:
+
+```bash
+# All products and runner profiles
+./bin/cepheus-build describe --json
+
+# Full description of one product (slug, targets, stores, groups, github config)
+./bin/cepheus-build describe -p printdeck --json
+```
+
+The `describe -p <product> --json` output includes target host restrictions,
+required tools, enabled/disabled state, store lanes with `required_env`, and
+the full list of `target_choices`. The GUI uses this endpoint instead of
+parsing TOML directly.
+
+`list`, `plan`, and `doctor` also accept `--json` to emit structured output
+instead of human-readable text:
+
+```bash
+./bin/cepheus-build list --json
+./bin/cepheus-build plan -p anvil desktop --json
+./bin/cepheus-build doctor -p deckhand desktop --json
+```
+
+When `doctor` finds missing tools it prints a suggestion to run `install-deps`.
+
+## Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--version` | Print the toolkit version and exit. |
+| `--no-color` | Disable ANSI color in all output. Also honored via the `NO_COLOR` environment variable (any non-empty value). |
+
+## Build Sync Controls
+
+By default, a local `build` fast-forwards the product repo before running
+targets (`git pull --recurse-submodules` + `submodule update --init
+--recursive`). Two flags control this:
+
+```bash
+# Skip the pre-build sync (use the checkout as-is)
+./bin/cepheus-build build -p printdeck macos --no-sync
+
+# Abort if the product working tree has uncommitted changes
+./bin/cepheus-build build -p printdeck macos --require-clean
+```
+
+`--dry-run` never mutates the product checkout regardless of `--no-sync`.
+
+## Security / Trust Boundary
+
+Product TOML `commands`, `pre`, `post`, and store lane entries are executed via
+the shell with full environment interpolation. They are **trusted input**.
+
+- Do not run `cepheus-build` with a `--config`/`.cepheus-build.toml` from an
+  untrusted repository without reviewing its contents — a malicious config can
+  execute arbitrary shell commands.
+- Store-lane `required_env` values must reference **file paths** to credential
+  files, not inlined secret content. For example, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+  should point to a JSON key file on disk.
+- `history/build-history.json` records command lines from past runs. Use
+  env-var references in lane commands (e.g. `$MY_SECRET`) rather than literal
+  values so secrets are not stored in history.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 ## Repo Adoption
 

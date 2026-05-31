@@ -49,6 +49,7 @@ class BuildSettings {
     required this.skipUnsupported,
     required this.keepGoing,
     required this.store,
+    required this.themeMode,
   });
 
   factory BuildSettings.defaults({required String toolkitRoot}) {
@@ -67,6 +68,7 @@ class BuildSettings {
       skipUnsupported: true,
       keepGoing: true,
       store: '',
+      themeMode: 'dark',
     );
   }
 
@@ -95,6 +97,7 @@ class BuildSettings {
           : true,
       keepGoing: json['keepGoing'] is bool ? json['keepGoing'] as bool : true,
       store: _string(json['store'], ''),
+      themeMode: _themeModeName(json['themeMode']),
     );
   }
 
@@ -113,6 +116,9 @@ class BuildSettings {
   final bool keepGoing;
   final String store;
 
+  /// Persisted Material theme selection: `'light'`, `'dark'`, or `'system'`.
+  final String themeMode;
+
   BuildSettings copyWith({
     String? toolkitRoot,
     String? product,
@@ -128,6 +134,7 @@ class BuildSettings {
     bool? skipUnsupported,
     bool? keepGoing,
     String? store,
+    String? themeMode,
   }) {
     return BuildSettings(
       toolkitRoot: toolkitRoot ?? this.toolkitRoot,
@@ -144,11 +151,13 @@ class BuildSettings {
       skipUnsupported: skipUnsupported ?? this.skipUnsupported,
       keepGoing: keepGoing ?? this.keepGoing,
       store: store ?? this.store,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'toolkitRoot': toolkitRoot,
       'product': product,
       'targets': targets,
       'executionMode': executionMode.value,
@@ -162,6 +171,7 @@ class BuildSettings {
       'skipUnsupported': skipUnsupported,
       'keepGoing': keepGoing,
       'store': store,
+      'themeMode': themeMode,
     };
   }
 }
@@ -314,4 +324,11 @@ String _string(Object? value, String fallback) {
   if (value == null) return fallback;
   final text = value.toString();
   return text.isEmpty ? fallback : text;
+}
+
+/// Normalizes a persisted theme value to one of the supported names,
+/// defaulting to `'dark'` to match the app's historical default.
+String _themeModeName(Object? value) {
+  final text = _string(value, 'dark');
+  return const {'light', 'dark', 'system'}.contains(text) ? text : 'dark';
 }

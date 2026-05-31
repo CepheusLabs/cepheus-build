@@ -5,3 +5,9 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# build run logs (keep the shared build-history.json)
+history/*/
+
+# local Claude Code harness state
+.claude/

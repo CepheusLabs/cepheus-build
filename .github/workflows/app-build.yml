@@ -81,13 +81,13 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout product
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: recursive
 
       - name: Checkout build toolkit
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: CepheusLabs/cepheus-build
           ref: ${{ inputs['toolkit-ref'] }}
@@ -138,13 +138,13 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Checkout product
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: recursive
 
       - name: Checkout build toolkit
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: CepheusLabs/cepheus-build
           ref: ${{ inputs['toolkit-ref'] }}
@@ -152,14 +152,14 @@ jobs:
 
       - name: Set up Flutter
         if: ${{ inputs['setup-flutter'] && matrix.setup_flutter }}
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
 
       - name: Set up Rust
         if: ${{ inputs['setup-rust'] && matrix.setup_rust }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: ${{ inputs['rust-toolchain'] }}
 
@@ -175,7 +175,7 @@ jobs:
 
       - name: Set up Go
         if: ${{ inputs['setup-go'] && matrix.setup_go }}
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: ${{ inputs['go-version'] }}
           cache: false
@@ -226,7 +226,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ inputs.product }}-${{ matrix.name }}
           path: ${{ runner.temp }}/cepheus-artifacts
