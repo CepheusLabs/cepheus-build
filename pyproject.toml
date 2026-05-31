@@ -23,6 +23,12 @@ cepheus-build = "cepheus_build.cli:main"
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
+# Explicit package list. Without this, setuptools flat-layout autodiscovery
+# fails ("Multiple top-level packages discovered") because the repo root holds
+# many non-package dirs (app, products, schemas, templates, shared, history).
+[tool.setuptools]
+packages = ["cepheus_build", "cepheus_build.deploy"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 120
