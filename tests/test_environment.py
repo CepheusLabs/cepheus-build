@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from cepheus_build.environment import expand_env_refs, resolve_value, target_env_values
-
 
 # ---------------------------------------------------------------------------
 # resolve_value()

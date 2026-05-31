@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from cepheus_build.process import (
     COCOAPODS_SPECS_REPAIR_PATTERNS,
     COMMAND_OUTPUT_FAILURE_PATTERNS,
@@ -15,7 +13,6 @@ from cepheus_build.process import (
     style_prefix,
     use_color,
 )
-
 
 # ---------------------------------------------------------------------------
 # should_treat_output_as_failure()

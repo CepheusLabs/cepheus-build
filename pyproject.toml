@@ -40,6 +40,7 @@ ignore = [
     "UP007",  # use X | Y for type unions — not required for existing code
     "UP006",  # use type instead of Type — not required for existing code
     "UP035",  # typing imports deprecated in 3.11 — not required for existing code
+    "UP022",  # prefer capture_output — explicit PIPE usage is intentional here
 ]
 
 [tool.mypy]

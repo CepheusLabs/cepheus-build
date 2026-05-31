@@ -14,7 +14,6 @@ from typing import Any
 
 from .errors import BuildError
 
-
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS_DIR = TOOL_ROOT / "products"
 TOOL_CONFIG_PATH = TOOL_ROOT / "build.toml"
@@ -214,7 +213,7 @@ def compute_stamp(config: ProductConfig) -> Stamp:
     if version_env and number_env:
         return Stamp(version_env, number_env)
 
-    today = dt.datetime.now(dt.timezone.utc if config.version.get("utc", False) else None)
+    today = dt.datetime.now(dt.UTC if config.version.get("utc", False) else None)
     default_version = f"{today.year % 100}.{today.month}.{today.day}"
     version = version_env or str(config.version.get("static_version") or default_version)
 

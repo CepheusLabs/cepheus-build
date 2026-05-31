@@ -15,7 +15,6 @@ from cepheus_build.config import (
     Stamp,
     compute_stamp,
     current_host,
-    find_config,
     host_list,
     load_toml,
     normalize_hosts,
@@ -23,7 +22,6 @@ from cepheus_build.config import (
     target_allowed_hosts,
 )
 from cepheus_build.errors import BuildError
-
 
 # ---------------------------------------------------------------------------
 # HOST_ALIASES

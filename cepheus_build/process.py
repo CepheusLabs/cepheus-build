@@ -32,7 +32,6 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-
 COCOAPODS_SPECS_REPAIR_PATTERNS = [
     "CocoaPods's specs repository is too out-of-date",
     "CocoaPods could not find compatible versions for pod",
