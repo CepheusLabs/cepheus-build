@@ -96,3 +96,45 @@ class TestDescribeCommand:
     def test_describe_unknown_product_exits_nonzero(self):
         result = run_cli("describe", "-p", "this-does-not-exist", "--json")
         assert result.returncode != 0
+
+
+class TestValidateCommand:
+    def test_all_real_products_validate(self):
+        result = run_cli("validate")
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_validate_json_shape(self):
+        result = run_cli("validate", "--json")
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert isinstance(data["results"], list)
+        assert all(r["valid"] for r in data["results"])
+
+    def test_validate_single_product(self):
+        result = run_cli("validate", "-p", "printdeck")
+        assert result.returncode == 0
+
+
+class TestStampJson:
+    def test_stamp_json_has_all_keys(self):
+        result = run_cli("stamp", "-p", "printdeck", "--json")
+        data = json.loads(result.stdout)
+        for key in ("version", "build_number", "full_version", "tag"):
+            assert key in data
+
+    def test_stamp_default_is_plain_full_version(self):
+        result = run_cli("stamp", "-p", "printdeck")
+        # plain mode: a single "version+build" line, not JSON
+        assert "+" in result.stdout
+        assert not result.stdout.strip().startswith("{")
+
+
+class TestArtifactsJson:
+    def test_artifacts_json_shape(self):
+        result = run_cli("artifacts", "-p", "printdeck", "web", "--json")
+        data = json.loads(result.stdout)
+        assert "targets" in data
+        assert "web" in data["targets"]
+        for row in data["targets"]["web"]:
+            assert "path" in row
+            assert "exists" in row

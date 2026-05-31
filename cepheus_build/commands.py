@@ -131,7 +131,14 @@ def cmd_plan(args: argparse.Namespace) -> int:
 def cmd_stamp(args: argparse.Namespace) -> int:
     config = load_product(args)
     stamp = compute_stamp(config)
-    if args.github_output:
+    if getattr(args, "json", False):
+        print(json.dumps({
+            "version": stamp.version,
+            "build_number": stamp.build_number,
+            "full_version": stamp.full,
+            "tag": f"v{stamp.version}-{stamp.build_number}",
+        }))
+    elif args.github_output:
         print(f"version={stamp.version}")
         print(f"build_number={stamp.build_number}")
         print(f"full_version={stamp.full}")
@@ -379,14 +386,23 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
     targets = config.expand_targets(args.targets)
     artifacts = collect_artifacts(config, targets)
     copy_to = resolve_path(args.copy_to, Path.cwd()) if args.copy_to else None
+    json_mode = getattr(args, "json", False)
+    payload: dict[str, list[dict[str, Any]]] = {}
     for target, paths in artifacts.items():
-        print(f"{target}:")
+        if not json_mode:
+            print(f"{target}:")
+        rows: list[dict[str, Any]] = []
         for path in paths:
-            marker = "ok" if path.exists() else "missing"
-            print(f"  [{marker}] {path}")
-            if copy_to and path.exists():
+            exists = path.exists()
+            if not json_mode:
+                print(f"  [{'ok' if exists else 'missing'}] {path}")
+            rows.append({"path": str(path), "exists": exists})
+            if copy_to and exists:
                 copy_artifact(path, copy_to, target)
-    if copy_to:
+        payload[target] = rows
+    if json_mode:
+        print(json.dumps({"copy_to": str(copy_to) if copy_to else None, "targets": payload}))
+    elif copy_to:
         print(f"copied artifacts to {copy_to}")
     return 0
 

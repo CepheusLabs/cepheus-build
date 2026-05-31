@@ -10,10 +10,16 @@ deploy = [
     "google-api-python-client>=2",
     "google-auth>=2",
 ]
+# Full JSON Schema validation for `cepheus-build validate`. Optional: without
+# it the command falls back to a built-in structural checker.
+schema = [
+    "jsonschema>=4",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
     "mypy>=1.10",
+    "jsonschema>=4",
 ]
 
 [project.scripts]

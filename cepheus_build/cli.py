@@ -143,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     stamp = sub.add_parser("stamp", help="Print the resolved version stamp.")
     add_product_args(stamp)
     stamp.add_argument("--github-output", action="store_true", help="Print key=value lines for GitHub outputs.")
+    add_json_arg(stamp)
     stamp.set_defaults(func=cmd_stamp)
 
     describe = sub.add_parser("describe", help="Emit JSON describing products or one product.")
@@ -199,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_product_args(artifacts)
     artifacts.add_argument("targets", nargs="*", help="Targets or groups. Defaults to desktop.")
     artifacts.add_argument("--copy-to", help="Copy existing artifacts into this directory by target.")
+    add_json_arg(artifacts)
     artifacts.set_defaults(func=cmd_artifacts)
 
     deploy = sub.add_parser("deploy", help="Run configured store deployment commands.")

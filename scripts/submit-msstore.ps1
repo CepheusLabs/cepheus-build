@@ -5,10 +5,34 @@ param(
   [string]$TenantId = $env:PARTNER_CENTER_TENANT_ID,
   [string]$ClientId = $env:PARTNER_CENTER_CLIENT_ID,
   [string]$ClientSecret = $env:PARTNER_CENTER_CLIENT_SECRET,
-  [string]$AppId = $env:PARTNER_CENTER_APP_ID
+  [string]$AppId = $env:PARTNER_CENTER_APP_ID,
+
+  # Dry run: validate inputs and print the planned actions without contacting
+  # Partner Center. Also enabled when CBUILD_DRY_RUN is set to a truthy value
+  # (the CLI's `deploy --dry-run` sets it), mirroring google_play.py.
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
+
+$envDryRun = $env:CBUILD_DRY_RUN
+$isDryRun = $DryRun.IsPresent -or `
+  (-not [string]::IsNullOrEmpty($envDryRun) -and `
+   $envDryRun -notin @("0", "false", "no"))
+
+# The package must exist regardless of mode.
+if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) {
+  throw "Package not found: $PackagePath"
+}
+
+if ($isDryRun) {
+  Write-Host "[dry-run] Microsoft Store submission - planned actions:"
+  Write-Host "  Package: $PackagePath"
+  Write-Host "  Would create a submission for app $AppId"
+  Write-Host "  Would zip + upload the package, then commit the submission"
+  Write-Host "[dry-run] No Partner Center API calls made."
+  exit 0
+}
 
 foreach ($item in @(
   @{ Name = "PARTNER_CENTER_TENANT_ID"; Value = $TenantId },
@@ -19,10 +43,6 @@ foreach ($item in @(
   if ([string]::IsNullOrWhiteSpace($item.Value)) {
     throw "Missing $($item.Name)"
   }
-}
-
-if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) {
-  throw "Package not found: $PackagePath"
 }
 
 $tokenBody = @{
