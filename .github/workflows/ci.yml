@@ -1,10 +1,11 @@
 name: CI
 
+# Manual-only: GitHub runner minutes are scarce, so this never auto-fires on
+# push/PR. Run it on demand from the Actions tab or:
+#   gh workflow run CI --ref main
+# To re-enable automatic runs later, add `pull_request:` / `push:` triggers.
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   python:
