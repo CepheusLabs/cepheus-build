@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:forge/forge.dart';
 
 import 'build_models.dart';
+import 'console_logic.dart' as logic;
 
 part 'console_models.dart';
 part 'console_data.dart';

@@ -266,42 +266,9 @@ extension _ConsoleActions on _BuildConsoleHomeState {
   }
 
   _CommandSpec _commandFor(BuildAction action) {
-    final args = <String>[
-      action.command,
-      '-p',
-      _settings.product,
-      if (_settings.repoRoot.trim().isNotEmpty) ...[
-        '--repo-root',
-        _settings.repoRoot.trim(),
-      ],
-    ];
-
-    switch (action) {
-      case BuildAction.plan:
-      case BuildAction.doctor:
-        args.addAll(_targetArgs);
-      case BuildAction.installDeps:
-        if (_settings.skipUnsupported) args.add('--skip-unsupported');
-        args.addAll(_targetArgs);
-      case BuildAction.matrix:
-        args.addAll([
-          '--runner-profile',
-          _settings.runnerProfile,
-          '--pretty',
-          ..._targetArgs,
-        ]);
-      case BuildAction.dryRun:
-        args.addAll(_buildCommandArgs(dryRun: true));
-        args.addAll(_targetArgs);
-      case BuildAction.build:
-        args.addAll(_buildCommandArgs(dryRun: false));
-        args.addAll(_targetArgs);
-      case BuildAction.deployPreview:
-        args.add(_storeArg());
-        args.add('--dry-run');
-      case BuildAction.deploy:
-        args.add(_storeArg());
-    }
+    // Arg-vector construction is pure and lives in console_logic.dart so it can
+    // be unit-tested directly; only platform wrapping + display stay here.
+    final args = logic.cliArgsFor(_settings, action);
 
     final invocation = _cliInvocation(_settings.toolkitRoot, args);
     if (Platform.isWindows) {
@@ -320,58 +287,6 @@ extension _ConsoleActions on _BuildConsoleHomeState {
       // Always validate (default); _run checks the script path on every host.
       validateExecutablePath: true,
     );
-  }
-
-  /// Positional store-lane arg for deploy/preview. The Deploy & Preview buttons
-  /// are gated by `canDeploy` (a non-null, enabled store), so the store is
-  /// always present here — assert rather than invent a placeholder target.
-  String _storeArg() {
-    final store = _settings.store.trim();
-    assert(store.isNotEmpty, 'deploy invoked without a selected store');
-    return store;
-  }
-
-  List<String> _buildCommandArgs({required bool dryRun}) {
-    final args = <String>['--execution-mode', _settings.executionMode.value];
-    if (dryRun) args.add('--dry-run');
-
-    if (_settings.executionMode == ExecutionMode.github) {
-      args.addAll(['--runner-profile', _settings.runnerProfile]);
-      final repo = _effectiveGitHubRepo(_settings);
-      if (repo.isNotEmpty) args.addAll(['--github-repo', repo]);
-      final workflow = _settings.githubWorkflow.trim();
-      if (workflow.isNotEmpty) args.addAll(['--github-workflow', workflow]);
-      if (_settings.product == 'foundry') {
-        args.add(
-          _settings.setupBuildrootDeps
-              ? '--setup-buildroot-deps'
-              : '--no-setup-buildroot-deps',
-        );
-        final buildrootDir = _settings.buildrootDir.trim();
-        if (buildrootDir.isNotEmpty) {
-          args.addAll(['--buildroot-dir', buildrootDir]);
-        }
-      }
-      return args;
-    }
-
-    args.addAll(['--mode', _settings.buildMode]);
-    if (!dryRun) args.add('--install-missing-deps');
-    if (_settings.skipUnsupported) args.add('--skip-unsupported');
-    args.add(_settings.keepGoing ? '--keep-going' : '--no-keep-going');
-    if (_settings.product == 'foundry') {
-      final buildrootDir = _settings.buildrootDir.trim();
-      if (buildrootDir.isNotEmpty) {
-        args.addAll(['--buildroot-dir', buildrootDir]);
-      }
-    }
-    return args;
-  }
-
-  List<String> get _targetArgs {
-    final raw = _settings.targets.trim();
-    if (raw.isEmpty) return ['all'];
-    return raw.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
   }
 
   String get _visibleOutput {

@@ -104,113 +104,17 @@ String _quoteForDisplay(String value) {
   return "'${value.replaceAll("'", r"'\''")}'";
 }
 
-/// Caps a stored run log so a single runaway build cannot bloat the history
-/// file. Keeps the last [_maxStoredOutputLines] lines and at most
-/// [_maxStoredOutputChars] characters (the tail, where failures live),
-/// prefixing a marker when anything was dropped. The LIVE buffer is never
+/// Caps a stored run log (see [logic.truncateOutput]). The LIVE buffer is never
 /// truncated — only the persisted `output` copy passes through here.
-String _truncateOutput(String output) {
-  final lines = output.split('\n');
-  final overLines = lines.length > _maxStoredOutputLines;
-  final overChars = output.length > _maxStoredOutputChars;
-  if (!overLines && !overChars) return output;
+String _truncateOutput(String output) => logic.truncateOutput(
+  output,
+  maxLines: _maxStoredOutputLines,
+  maxChars: _maxStoredOutputChars,
+);
 
-  var kept = overLines
-      ? lines.sublist(lines.length - _maxStoredOutputLines)
-      : lines;
-  var text = kept.join('\n');
-  if (text.length > _maxStoredOutputChars) {
-    text = text.substring(text.length - _maxStoredOutputChars);
-    // The char trim may have clipped the first retained line.
-    kept = text.split('\n');
-  }
-  final marker =
-      '… [output truncated: showing last ${kept.length} of ${lines.length} lines] …';
-  return '$marker\n$text';
-}
-
-/// Masks secret-looking values in a command string before it is persisted to
-/// history. Env-var *references* (e.g. `$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`)
-/// are left intact — only inline literals are redacted. Examples:
-///   `--token abc...(>=20 chars)`            -> `--token ***`
-///   `SERVICE_ACCOUNT_KEY={"type":"..."}`    -> `SERVICE_ACCOUNT_KEY=***`
-///   `deploy google_play $GP_KEY_JSON`       -> unchanged
-String _redactSecrets(String command) {
-  final sensitive = RegExp(
-    r'(token|secret|key|password|service-account)',
-    caseSensitive: false,
-  );
-
-  bool looksInline(String value) {
-    final bare = _stripQuotes(value);
-    if (bare.startsWith(r'$')) return false; // env-var reference
-    return bare.startsWith('{') || bare.length >= 20;
-  }
-
-  bool looksSecretBlob(String value) {
-    final bare = _stripQuotes(value);
-    if (bare.startsWith(r'$')) return false;
-    // No '/': avoids masking filesystem paths and `owner/repo` specs. Inline
-    // secrets that do contain '/' are still caught via sensitive flag/KEY=...
-    return RegExp(r'^[A-Za-z0-9+=_-]{20,}$').hasMatch(bare);
-  }
-
-  final tokens = command.split(' ');
-  final result = <String>[];
-  String? prevFlag;
-  for (final token in tokens) {
-    if (token.isEmpty) {
-      result.add(token);
-      continue;
-    }
-    final eq = token.indexOf('=');
-    if (token.startsWith('--')) {
-      if (eq > 0) {
-        final key = token.substring(0, eq);
-        final value = token.substring(eq + 1);
-        result.add(
-          sensitive.hasMatch(key) && looksInline(value) ? '$key=***' : token,
-        );
-        prevFlag = null;
-      } else {
-        result.add(token);
-        prevFlag = token;
-      }
-      continue;
-    }
-    if (prevFlag != null && sensitive.hasMatch(prevFlag) && looksInline(token)) {
-      result.add('***');
-      prevFlag = null;
-      continue;
-    }
-    prevFlag = null;
-    if (eq > 0 && !token.startsWith('-')) {
-      final key = token.substring(0, eq);
-      final value = token.substring(eq + 1);
-      if (sensitive.hasMatch(key) && looksInline(value)) {
-        result.add('$key=***');
-        continue;
-      }
-    }
-    if (looksSecretBlob(token)) {
-      result.add('***');
-      continue;
-    }
-    result.add(token);
-  }
-  return result.join(' ');
-}
-
-String _stripQuotes(String value) {
-  if (value.length >= 2) {
-    final first = value[0];
-    final last = value[value.length - 1];
-    if ((first == "'" && last == "'") || (first == '"' && last == '"')) {
-      return value.substring(1, value.length - 1);
-    }
-  }
-  return value;
-}
+/// Masks secret-looking values before a command is persisted to history.
+/// Delegates to [logic.redactSecrets].
+String _redactSecrets(String command) => logic.redactSecrets(command);
 
 /// Maps a persisted theme name to a [ThemeMode], defaulting to dark.
 ThemeMode _themeModeFromString(String value) {
@@ -236,61 +140,12 @@ String _themeModeToString(ThemeMode mode) {
   }
 }
 
-/// Renders build history as CSV (Excel-friendly CRLF rows) for reporting.
-String _historyToCsv(List<BuildHistoryEntry> entries) {
-  const header = [
-    'id',
-    'started_at',
-    'product',
-    'action',
-    'targets',
-    'execution_mode',
-    'runner_profile',
-    'build_mode',
-    'store',
-    'exit_code',
-    'status',
-    'duration_ms',
-    'command',
-  ];
-  final rows = <String>[header.join(',')];
-  for (final entry in entries) {
-    rows.add(
-      [
-        _csvField(entry.id),
-        _csvField(entry.startedAt.toIso8601String()),
-        _csvField(entry.product),
-        _csvField(entry.action.label),
-        _csvField(entry.targets),
-        _csvField(entry.executionMode.value),
-        _csvField(entry.runnerProfile),
-        _csvField(entry.buildMode),
-        _csvField(entry.store),
-        _csvField(entry.exitCode),
-        _csvField(entry.status),
-        _csvField(entry.durationMs),
-        _csvField(entry.command),
-      ].join(','),
-    );
-  }
-  return '${rows.join('\r\n')}\r\n';
-}
+/// Renders build history as CSV for reporting (see [logic.historyToCsv]).
+String _historyToCsv(List<BuildHistoryEntry> entries) =>
+    logic.historyToCsv(entries);
 
-String _csvField(Object? value) {
-  final text = value?.toString() ?? '';
-  if (text.contains(RegExp(r'[",\r\n]'))) {
-    return '"${text.replaceAll('"', '""')}"';
-  }
-  return text;
-}
-
-/// Compact filesystem-safe timestamp, e.g. `20260530-142233`.
-String _compactTimestamp(DateTime value) {
-  final local = value.toLocal();
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${local.year}${two(local.month)}${two(local.day)}'
-      '-${two(local.hour)}${two(local.minute)}${two(local.second)}';
-}
+/// Compact filesystem-safe timestamp, e.g. `20260530-142233` (local time).
+String _compactTimestamp(DateTime value) => logic.compactTimestamp(value);
 
 String _timeLabel(DateTime value) {
   final local = value.toLocal();
