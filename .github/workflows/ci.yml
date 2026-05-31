@@ -7,6 +7,17 @@ name: CI
 on:
   workflow_dispatch:
 
+# A newer manual dispatch supersedes an in-flight one for the same ref, so we
+# never burn scarce runner minutes on stale runs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Opt into the Node 24 actions runtime now (GitHub forces it June 2026). We
+# don't use Node ourselves — this only affects the JS-based actions below.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   python:
     name: Python lint & test

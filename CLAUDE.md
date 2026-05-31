@@ -46,7 +46,7 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 
 Products: `printdeck`, `colorwake-studio`, `anvil`, `deckhand`, `foundry`. `targets` are individual target names (`macos`, `web`, `android`) or group names defined per product (`desktop`, `all`, `os`, `quality`, etc.). Most subcommands default to the `desktop` group when no target is given (`ci-matrix` defaults to `all`).
 
-There is **no Python test suite or linter configured** (no pytest/ruff/mypy in `pyproject.toml`). Validate CLI changes with `plan`/`doctor`/`--dry-run` against a product, e.g. `./bin/cepheus-build build -p printdeck all --dry-run`. If `.[dev]` extras are added, run `ruff check .` and `pytest` as well.
+A pytest suite + ruff/mypy config live in the repo. Install dev extras and run them: `pip install -e .[dev]`, then `pytest`, `ruff check .`, and `mypy cepheus_build` (mypy is advisory). `tests/` covers the pure logic and a CLI smoke layer; the command handlers (`cmd_build`, `run_target`, `collect_artifacts`, `sync_repo_before_build`) are also tested with a temp product config + monkeypatched `run_command`. Also validate behavior with `plan`/`doctor`/`--dry-run` against a product, e.g. `./bin/cepheus-build build -p printdeck all --dry-run`. The `.github/workflows/ci.yml` job runs these but is **manual-only** (`workflow_dispatch`) to conserve runner minutes.
 
 Global flags available on all subcommands: `--no-color` disables ANSI color output; the `NO_COLOR` environment variable (any non-empty value) has the same effect. `--version` prints the toolkit version and exits. Subprocess auxiliary commands (tool checks, git sync, `gh workflow run` dispatch) have timeouts to prevent hangs.
 

@@ -1,6 +1,8 @@
 [product]
 slug = "deckhand"
 display_name = "Deckhand"
+# NB: the repo directory is "deckhand-app", not "deckhand" — slug and repo name
+# intentionally differ here. Do not "correct" this to ../../deckhand.
 repo_root = "../../deckhand-app"
 app_dir = "app"
 

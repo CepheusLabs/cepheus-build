@@ -73,6 +73,11 @@ on:
         default: ''
         type: string
 
+# Opt into the Node 24 actions runtime now (GitHub forces it June 2026). The
+# toolkit itself uses no Node; this only affects the JS-based actions below.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   plan:
     name: Plan
