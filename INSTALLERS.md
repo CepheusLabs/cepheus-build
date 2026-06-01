@@ -122,6 +122,38 @@ Publisher: **Cepheus Labs, LLC** · Apple Team ID **J2W5M4CY69**.
 
 ---
 
+## Post-review hardening (multi-agent adversarial review)
+
+A 5-agent review (orchestration, shared scripts, + one per product repo) ran
+after the initial build. Confirmed findings fixed:
+
+**cepheus-build (committed to main):**
+- `github_release` lanes now call `scripts/upload-release.sh` (nullglob, files
+  only, exit 0 on no match) instead of a bare `gh release upload … *` that
+  failed on unmatched cross-host globs and swept staging dirs.
+- `publish-apt-repo.sh`: Release file now carries MD5Sum/SHA256 sections (else
+  `apt update` rejects the repo).
+- apt/yum passphrase args made array-based (unquoted `${VAR:+…}` word-split a
+  passphrase with spaces).
+- apt/yum/flatpak uploads dropped `--delete` (was wiping prior versions /
+  sibling products / OSTree history).
+- `publish-flatpak-repo.sh`: `ostree init` guard before first import; empty-array
+  `set -u` guards (bash 3.2).
+- `sign-linux-gpg.sh`: empty-array guards. `sign-windows.ps1`: idempotent tool
+  install. colorwake `desktop_packages`: dropped `windows-msix` (Store artifact).
+
+**Product repos (uncommitted, with the rest of Wave D):**
+- `build_flatpak.sh` (all 3): manifest copied into the stage parent so the
+  manifest's `path: flatpak-stage` resolves — was a build-breaking path mismatch.
+- `build_rpm.sh` (all 3): output filename uses normalized `RPM_VERSION`; anvil +
+  colorwake gained an icon fallback so `%files` never references a missing file.
+- `anvil.iss` / `colorwake.iss`: `skipifsourcedoesntexist` on the Files source.
+
+One reported blocker — "flatpak strands Flutter `data/`, app won't launch" — was
+a **false positive**: Flutter resolves assets via `/proc/self/exe`, which
+canonicalizes the `/app/bin` symlink to the real binary where `data/` + `lib/`
+already sit. Left as-is.
+
 ## Open (non-blocking) items
 - **Azure entity eligibility** — Trusted Signing public-trust org certs need a
   US/CA/EU/UK entity; org path historically wanted 3 yrs of history (individual
