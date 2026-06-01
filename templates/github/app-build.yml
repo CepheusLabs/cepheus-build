@@ -12,4 +12,12 @@ jobs:
       toolkit-ref: main
       runner-profile: self-hosted
       planner-runner-json: '["self-hosted","linux"]'
+      # Use `desktop_packages` here to build signed native installers
+      # (dmg / exe / deb / rpm / flatpak) instead of raw bundles.
       targets: all
+    # `inherit` forwards this repo's signing secrets (Azure Trusted Signing,
+    # macOS Developer ID / notarytool, GPG) to the reusable workflow. All are
+    # optional — unset ones just produce unsigned artifacts, so this is safe to
+    # add before signing is configured. Set the secrets in the product repo's
+    # Actions settings to turn signing on with no file change.
+    secrets: inherit

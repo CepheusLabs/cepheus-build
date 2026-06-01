@@ -62,6 +62,11 @@ on:
         required: false
         default: true
         type: boolean
+      setup-packaging:
+        description: Install native-installer toolchains (Inno Setup / dpkg / rpm / flatpak) when a matrix row builds those formats.
+        required: false
+        default: true
+        type: boolean
       buildroot-dir:
         description: Optional Buildroot checkout path for products that build OS images.
         required: false
@@ -72,6 +77,40 @@ on:
         required: false
         default: ''
         type: string
+    # Code-signing credentials. ALL optional: when a secret is unset the
+    # packaging scripts fall back to an unsigned artifact + warning (see
+    # scripts/sign-windows.ps1 and scripts/sign-linux-gpg.sh). The caller passes
+    # these via `secrets: inherit`; nothing here is ever echoed to logs.
+    secrets:
+      # Windows — Azure Trusted Signing.
+      AZURE_TENANT_ID:
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_CLIENT_SECRET:
+        required: false
+      TRUSTED_SIGNING_ENDPOINT:
+        required: false
+      TRUSTED_SIGNING_ACCOUNT:
+        required: false
+      TRUSTED_SIGNING_CERT_PROFILE:
+        required: false
+      # macOS — Developer ID + notarytool.
+      MACOS_SIGN_ID:
+        required: false
+      MACOS_NOTARIZE_APPLE_ID:
+        required: false
+      MACOS_NOTARIZE_PASSWORD:
+        required: false
+      MACOS_NOTARIZE_TEAM_ID:
+        required: false
+      # Linux — GPG signing for packages + repo metadata.
+      GPG_SIGNING_KEY:
+        required: false
+      GPG_SIGNING_KEY_ID:
+        required: false
+      GPG_SIGNING_KEY_PASSPHRASE:
+        required: false
 
 # Opt into the Node 24 actions runtime now (GitHub forces it June 2026). The
 # toolkit itself uses no Node; this only affects the JS-based actions below.
@@ -203,10 +242,55 @@ jobs:
             unzip \
             wget
 
+      - name: Install Inno Setup
+        if: ${{ inputs['setup-packaging'] && matrix.setup_innosetup && matrix.host == 'windows' }}
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Install deb packaging tools
+        if: ${{ inputs['setup-packaging'] && matrix.setup_deb && matrix.host == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Install rpm packaging tools
+        if: ${{ inputs['setup-packaging'] && matrix.setup_rpm && matrix.host == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Install flatpak packaging tools
+        if: ${{ inputs['setup-packaging'] && matrix.setup_flatpak && matrix.host == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+
       - name: Build
         shell: bash
         env:
           BUILDROOT_DIR: ${{ inputs['buildroot-dir'] }}
+          # Code-signing passthrough. Every var is optional — when a secret is
+          # unset the packaging scripts emit an unsigned artifact + warning, so
+          # builds work before signing is configured. Never echoed to logs.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          TRUSTED_SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
+          TRUSTED_SIGNING_CERT_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERT_PROFILE }}
+          MACOS_SIGN_ID: ${{ secrets.MACOS_SIGN_ID }}
+          MACOS_NOTARIZE_APPLE_ID: ${{ secrets.MACOS_NOTARIZE_APPLE_ID }}
+          MACOS_NOTARIZE_PASSWORD: ${{ secrets.MACOS_NOTARIZE_PASSWORD }}
+          MACOS_NOTARIZE_TEAM_ID: ${{ secrets.MACOS_NOTARIZE_TEAM_ID }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_KEY_ID: ${{ secrets.GPG_SIGNING_KEY_ID }}
+          GPG_SIGNING_KEY_PASSPHRASE: ${{ secrets.GPG_SIGNING_KEY_PASSPHRASE }}
         run: |
           set -euo pipefail
           PYTHON_BIN="$(command -v python3 || command -v python)"
