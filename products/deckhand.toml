@@ -14,7 +14,7 @@ repository = "CepheusLabs/deckhand-app"
 
 [groups]
 desktop = ["macos", "windows", "linux"]
-desktop_packages = ["macos-dmg", "windows-installer", "linux-appimage"]
+desktop_packages = ["macos-dmg", "windows-installer", "linux-appimage", "linux-deb", "linux-rpm", "linux-flatpak"]
 all = ["macos", "windows", "linux"]
 
 [targets.macos]
@@ -74,6 +74,36 @@ commands = [
 artifacts = ["packaging/linux/dist/*.AppImage"]
 tools = ["bash", "go", "flutter", "appimagetool"]
 
+[targets.linux-deb]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build.sh linux --release",
+  "bash packaging/linux/build_deb.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.deb"]
+tools = ["bash", "go", "flutter", "dpkg-deb"]
+
+[targets.linux-rpm]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build.sh linux --release",
+  "bash packaging/linux/build_rpm.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.rpm"]
+tools = ["bash", "go", "flutter", "rpmbuild"]
+
+[targets.linux-flatpak]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build.sh linux --release",
+  "bash packaging/linux/build_flatpak.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.flatpak"]
+tools = ["bash", "go", "flutter", "flatpak", "flatpak-builder"]
+
 [targets.ios]
 enabled = false
 
@@ -87,6 +117,35 @@ enabled = false
 enabled = true
 cwd = "."
 required_env = ["GITHUB_TOKEN"]
+# packaging/linux/dist/* now also covers the new .deb/.rpm/.flatpak alongside
+# the existing .AppImage.
 commands = [
   "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" packaging/windows/dist/* packaging/macos/dist/* packaging/linux/dist/* --clobber",
+]
+
+# ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────
+# enabled = false until the repo HOST is chosen (see INSTALLERS.md). Shared,
+# host-gated publish scaffolds; GPG signing env-gated via GPG_SIGNING_KEY.
+[stores.apt_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "APT_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-apt-repo.sh\" packaging/linux/dist/*.deb",
+]
+
+[stores.yum_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "YUM_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-yum-repo.sh\" packaging/linux/dist/*.rpm",
+]
+
+[stores.flatpak_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "FLATPAK_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-flatpak-repo.sh\" packaging/linux/dist/*.flatpak",
 ]

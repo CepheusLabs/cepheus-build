@@ -12,6 +12,9 @@ repository = "CepheusLabs/anvil"
 
 [groups]
 desktop = ["macos", "windows", "linux"]
+# Distributable installers (signed where creds exist). Build with:
+#   cepheus-build build -p anvil desktop_packages
+desktop_packages = ["macos-dmg", "windows-installer", "linux-deb", "linux-rpm", "linux-flatpak"]
 mobile = ["ios", "android"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
@@ -85,6 +88,63 @@ commands = [
 artifacts = ["app/build/linux/x64/release/bundle"]
 tools = ["cargo", "flutter"]
 
+# ── Distributable installer targets (desktop_packages group) ────────────────
+# Each builds the app, then wraps it in an OS-native installer. Signing is
+# env-gated inside the packaging scripts (unsigned passthrough until creds
+# exist). Packaging recipes live in the product repo under packaging/<os>/.
+
+[targets.macos-dmg]
+hosts = ["macos"]
+cwd = "."
+# The existing dev-id script builds the .app, signs (Developer ID + hardened
+# runtime), wraps it in a DMG and notarizes when a notary profile is present.
+# CBUILD_* are mapped to the script's own env names.
+commands = [
+  "ANVIL_VERSION=\"$CBUILD_VERSION\" ANVIL_BUILD_NUMBER=\"$CBUILD_BUILD_NUMBER\" bash scripts/package-macos-developerid.sh",
+]
+artifacts = ["dist/macos/Anvil-*.dmg"]
+tools = ["cargo", "flutter", "xcodebuild", "pod", "codesign"]
+
+[targets.windows-installer]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_installer.ps1 -Version \"$env:CBUILD_VERSION\"",
+]
+artifacts = ["packaging/windows/dist/*.exe"]
+tools = ["pwsh", "cargo", "flutter", "iscc"]
+
+[targets.linux-deb]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_deb.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.deb"]
+tools = ["cargo", "flutter", "dpkg-deb"]
+
+[targets.linux-rpm]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_rpm.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.rpm"]
+tools = ["cargo", "flutter", "rpmbuild"]
+
+[targets.linux-flatpak]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_flatpak.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.flatpak"]
+tools = ["cargo", "flutter", "flatpak", "flatpak-builder"]
+
 [stores.testflight_ios]
 enabled = false
 cwd = "."
@@ -99,4 +159,45 @@ cwd = "."
 required_env = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
 commands = [
   "python3 -m cepheus_build.deploy.google_play --aab app/build/app/outputs/bundle/release/app-release.aab --package com.cepheuslabs.anvil --track \"${PLAY_TRACK:-internal}\" --service-account \"$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON\"",
+]
+
+# ── Direct-download release: upload installers to a GitHub Release ───────────
+# The release/tag itself is created by the product's release workflow; this
+# lane uploads the built installers to it. Run after desktop_packages.
+[stores.github_release]
+enabled = true
+cwd = "."
+required_env = ["GITHUB_TOKEN"]
+commands = [
+  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" dist/macos/Anvil-*.dmg packaging/windows/dist/*.exe packaging/linux/dist/* --clobber",
+]
+
+# ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────
+# enabled = false until the repo HOST is chosen (GitHub Pages / S3 / own
+# server — see INSTALLERS.md open items). The publish scripts are shared,
+# host-gated scaffolds: they build + GPG-sign repo metadata locally and
+# upload only when the *_REPO_URL/target is configured. GPG signing is
+# env-gated via GPG_SIGNING_KEY (unsigned + warning when unset).
+[stores.apt_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "APT_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-apt-repo.sh\" packaging/linux/dist/*.deb",
+]
+
+[stores.yum_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "YUM_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-yum-repo.sh\" packaging/linux/dist/*.rpm",
+]
+
+[stores.flatpak_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "FLATPAK_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-flatpak-repo.sh\" packaging/linux/dist/*.flatpak",
 ]

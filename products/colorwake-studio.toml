@@ -12,7 +12,9 @@ repository = "CepheusLabs/colorwake-studio"
 
 [groups]
 desktop = ["macos", "windows", "linux"]
-desktop_packages = ["windows-msix"]
+# Distributable installers. windows-msix is kept (Microsoft Store path); the
+# desktop_packages group is the direct-download set: dmg + .exe + deb/rpm/flatpak.
+desktop_packages = ["macos-dmg", "windows-installer", "windows-msix", "linux-deb", "linux-rpm", "linux-flatpak"]
 mobile = ["ios", "android"]
 stores = ["ios", "macos", "android", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
@@ -98,6 +100,61 @@ commands = [
 artifacts = ["apps/colorwake_studio/build/linux/x64/release/bundle"]
 tools = ["cargo", "flutter"]
 
+# ── Distributable installer targets (desktop_packages group) ────────────────
+# Signing is env-gated inside the packaging scripts. Recipes live in the
+# product repo under packaging/<os>/.
+
+[targets.macos-dmg]
+hosts = ["macos"]
+cwd = "."
+# Existing dev-id script: builds the .app, lipo's the universal native dylib,
+# signs (Developer ID + hardened runtime), DMGs and notarizes when configured.
+commands = [
+  "COLORWAKE_VERSION=\"$CBUILD_VERSION\" COLORWAKE_BUILD_NUMBER=\"$CBUILD_BUILD_NUMBER\" bash scripts/package-macos-developerid.sh",
+]
+artifacts = ["dist/macos/ColorwakeStudio-*.dmg"]
+tools = ["cargo", "flutter", "xcodebuild", "pod", "lipo", "install_name_tool", "codesign"]
+
+[targets.windows-installer]
+hosts = ["windows"]
+cwd = "."
+commands = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_installer.ps1 -Version \"$env:CBUILD_VERSION\"",
+]
+artifacts = ["packaging/windows/dist/*.exe"]
+tools = ["pwsh", "cargo", "flutter", "iscc"]
+
+[targets.linux-deb]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_deb.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.deb"]
+tools = ["cargo", "flutter", "dpkg-deb"]
+
+[targets.linux-rpm]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_rpm.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.rpm"]
+tools = ["cargo", "flutter", "rpmbuild"]
+
+[targets.linux-flatpak]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash scripts/build-linux.sh",
+  "bash packaging/linux/build_flatpak.sh \"$CBUILD_VERSION\"",
+]
+artifacts = ["packaging/linux/dist/*.flatpak"]
+tools = ["cargo", "flutter", "flatpak", "flatpak-builder"]
+
 [stores.testflight_ios]
 enabled = true
 hosts = ["macos"]
@@ -130,4 +187,40 @@ cwd = "."
 required_env = ["PARTNER_CENTER_TENANT_ID", "PARTNER_CENTER_CLIENT_ID", "PARTNER_CENTER_CLIENT_SECRET", "PARTNER_CENTER_APP_ID"]
 commands = [
   "pwsh -NoProfile -File \"$CBUILD_TOOL_ROOT/scripts/submit-msstore.ps1\" -PackagePath \"$CBUILD_APP_DIR/build/windows/x64/runner/Release/ColorwakeStudio.msix\"",
+]
+
+# ── Direct-download release: upload installers to a GitHub Release ───────────
+[stores.github_release]
+enabled = true
+cwd = "."
+required_env = ["GITHUB_TOKEN"]
+commands = [
+  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" dist/macos/ColorwakeStudio-*.dmg packaging/windows/dist/*.exe packaging/linux/dist/* --clobber",
+]
+
+# ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────
+# enabled = false until the repo HOST is chosen (see INSTALLERS.md). Shared,
+# host-gated publish scaffolds; GPG signing env-gated via GPG_SIGNING_KEY.
+[stores.apt_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "APT_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-apt-repo.sh\" packaging/linux/dist/*.deb",
+]
+
+[stores.yum_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "YUM_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-yum-repo.sh\" packaging/linux/dist/*.rpm",
+]
+
+[stores.flatpak_repo]
+enabled = false
+cwd = "."
+required_env = ["GPG_SIGNING_KEY", "FLATPAK_REPO_TARGET"]
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/publish-flatpak-repo.sh\" packaging/linux/dist/*.flatpak",
 ]
