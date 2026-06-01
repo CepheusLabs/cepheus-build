@@ -69,23 +69,44 @@ fi
 gzip -kf "$bindir/Packages"
 
 echo "==> Writing Release"
-release="$REPO_ROOT/dists/$SUITE/Release"
+rel_dir="$REPO_ROOT/dists/$SUITE"
+release="$rel_dir/Release"
 {
+  echo "Origin: Cepheus Labs"
+  echo "Label: Cepheus Labs"
   echo "Suite: $SUITE"
+  echo "Codename: $SUITE"
   echo "Component: main"
   echo "Architectures: $ARCH"
   echo "Date: $(date -u '+%a, %d %b %Y %H:%M:%S UTC')"
 } > "$release"
 
+# apt REQUIRES per-index checksum sections in Release (each line:
+# "<hash> <size> <path-relative-to-this-Release>"). Without them `apt update`
+# rejects the repo even when the Release is signed. Compute them by hand so we
+# don't depend on apt-ftparchive being installed.
+emit_hashes() {
+  local label="$1" tool="$2" f
+  echo "$label:"
+  for f in "main/binary-$ARCH/Packages" "main/binary-$ARCH/Packages.gz"; do
+    [ -f "$rel_dir/$f" ] || continue
+    printf ' %s %s %s\n' "$("$tool" "$rel_dir/$f" | cut -d' ' -f1)" "$(wc -c < "$rel_dir/$f")" "$f"
+  done
+}
+{ emit_hashes "MD5Sum" md5sum; emit_hashes "SHA256" sha256sum; } >> "$release"
+
 # GPG-sign the Release (detached Release.gpg + inline InRelease) if configured.
 if key_id="$(ensure_gpg_key 2>/dev/null)"; then
   echo "==> Signing Release with $key_id"
+  # Build the passphrase args as an array; an unquoted ${VAR:+...} would
+  # word-split a passphrase that contains spaces (wrong key + stray operands).
+  pass_args=()
+  [ -n "${GPG_SIGNING_KEY_PASSPHRASE:-}" ] && \
+    pass_args=(--pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSPHRASE")
   gpg --batch --yes --armor --detach-sign --local-user "$key_id" \
-    ${GPG_SIGNING_KEY_PASSPHRASE:+--pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSPHRASE"} \
-    --output "$release.gpg" "$release"
+    ${pass_args[@]+"${pass_args[@]}"} --output "$release.gpg" "$release"
   gpg --batch --yes --clearsign --local-user "$key_id" \
-    ${GPG_SIGNING_KEY_PASSPHRASE:+--pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSPHRASE"} \
-    --output "$REPO_ROOT/dists/$SUITE/InRelease" "$release"
+    ${pass_args[@]+"${pass_args[@]}"} --output "$rel_dir/InRelease" "$release"
 else
   echo "warning: GPG_SIGNING_KEY unset — apt repo metadata is UNSIGNED." >&2
 fi
