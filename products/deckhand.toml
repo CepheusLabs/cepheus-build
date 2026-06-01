@@ -117,10 +117,12 @@ enabled = false
 enabled = true
 cwd = "."
 required_env = ["GITHUB_TOKEN"]
-# packaging/linux/dist/* now also covers the new .deb/.rpm/.flatpak alongside
-# the existing .AppImage.
+# Globs quoted for upload-release.sh (nullglob + files-only): skips absent
+# cross-host artifacts and filters out staging subdirs / stale dirs under the
+# dist folders (a bare * would hand gh a directory and fail). Covers the new
+# .deb/.rpm/.flatpak alongside the existing .AppImage.
 commands = [
-  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" packaging/windows/dist/* packaging/macos/dist/* packaging/linux/dist/* --clobber",
+  "bash \"$CBUILD_TOOL_ROOT/scripts/upload-release.sh\" \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" \"packaging/macos/dist/*.dmg\" \"packaging/windows/dist/*.exe\" \"packaging/linux/dist/*.AppImage\" \"packaging/linux/dist/*.deb\" \"packaging/linux/dist/*.rpm\" \"packaging/linux/dist/*.flatpak\"",
 ]
 
 # ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────

@@ -168,8 +168,11 @@ commands = [
 enabled = true
 cwd = "."
 required_env = ["GITHUB_TOKEN"]
+# Globs are quoted so upload-release.sh expands them with nullglob: cross-host
+# artifacts absent on a single-host run are skipped, and staging subdirs under
+# packaging/linux/dist are filtered out (only real files upload).
 commands = [
-  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" dist/macos/Anvil-*.dmg packaging/windows/dist/*.exe packaging/linux/dist/* --clobber",
+  "bash \"$CBUILD_TOOL_ROOT/scripts/upload-release.sh\" \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" \"dist/macos/Anvil-*.dmg\" \"packaging/windows/dist/*.exe\" \"packaging/linux/dist/*.deb\" \"packaging/linux/dist/*.rpm\" \"packaging/linux/dist/*.flatpak\"",
 ]
 
 # ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────

@@ -48,6 +48,12 @@ command -v flatpak >/dev/null 2>&1 || {
 
 mkdir -p "$REPO_ROOT"
 
+# build-import-bundle needs an initialized archive-z2 OSTree repo; create one on
+# first use. (An OSTree repo root has a `config` file.)
+if [ ! -f "$REPO_ROOT/config" ] && command -v ostree >/dev/null 2>&1; then
+  ostree --repo="$REPO_ROOT" init --mode=archive-z2
+fi
+
 # Resolve optional GPG signing args once.
 gpg_args=()
 if key_id="$(ensure_gpg_key 2>/dev/null)"; then
@@ -58,13 +64,15 @@ else
   echo "warning: GPG_SIGNING_KEY unset — flatpak repo will be UNSIGNED." >&2
 fi
 
+# ${arr[@]+...} guards an empty gpg_args under `set -u` on bash 3.2 (macOS),
+# where a bare "${gpg_args[@]}" would abort with "unbound variable".
 for b in "${bundles[@]}"; do
   echo "==> Importing $b"
-  flatpak build-import-bundle "${gpg_args[@]}" "$REPO_ROOT" "$b"
+  flatpak build-import-bundle ${gpg_args[@]+"${gpg_args[@]}"} "$REPO_ROOT" "$b"
 done
 
 echo "==> Updating repo summary"
-flatpak build-update-repo "${gpg_args[@]}" "$REPO_ROOT"
+flatpak build-update-repo ${gpg_args[@]+"${gpg_args[@]}"} "$REPO_ROOT"
 
 if [ -z "${FLATPAK_REPO_TARGET:-}" ]; then
   echo "==> Built local flatpak repo at $REPO_ROOT"
@@ -73,8 +81,11 @@ if [ -z "${FLATPAK_REPO_TARGET:-}" ]; then
 fi
 
 echo "==> Uploading repo to $FLATPAK_REPO_TARGET"
+# No --delete: an OSTree repo is a content-addressed object store with history;
+# deleting remote objects not in this fresh local repo corrupts it for existing
+# clients (and a shared target may host sibling products).
 case "$FLATPAK_REPO_TARGET" in
-  s3://*) aws s3 sync "$REPO_ROOT/" "$FLATPAK_REPO_TARGET/" --delete ;;
-  *)      rsync -az --delete "$REPO_ROOT/" "$FLATPAK_REPO_TARGET/" ;;
+  s3://*) aws s3 sync "$REPO_ROOT/" "$FLATPAK_REPO_TARGET/" ;;
+  *)      rsync -az "$REPO_ROOT/" "$FLATPAK_REPO_TARGET/" ;;
 esac
 echo "==> Published flatpak repo."

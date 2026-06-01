@@ -12,9 +12,11 @@ repository = "CepheusLabs/colorwake-studio"
 
 [groups]
 desktop = ["macos", "windows", "linux"]
-# Distributable installers. windows-msix is kept (Microsoft Store path); the
-# desktop_packages group is the direct-download set: dmg + .exe + deb/rpm/flatpak.
-desktop_packages = ["macos-dmg", "windows-installer", "windows-msix", "linux-deb", "linux-rpm", "linux-flatpak"]
+# Direct-download installer set: dmg + .exe + deb/rpm/flatpak. The windows-msix
+# target still exists for the Microsoft Store (see the `stores` group and the
+# microsoft_store lane) but is deliberately NOT in desktop_packages — it would
+# double-build Windows and isn't a direct download.
+desktop_packages = ["macos-dmg", "windows-installer", "linux-deb", "linux-rpm", "linux-flatpak"]
 mobile = ["ios", "android"]
 stores = ["ios", "macos", "android", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
@@ -194,8 +196,12 @@ commands = [
 enabled = true
 cwd = "."
 required_env = ["GITHUB_TOKEN"]
+# Globs quoted for upload-release.sh (nullglob + files-only): absent cross-host
+# artifacts are skipped and staging subdirs are filtered out. The .msix is a
+# Store artifact (microsoft_store lane), not a direct download, so it is not
+# listed here.
 commands = [
-  "gh release upload \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" dist/macos/ColorwakeStudio-*.dmg packaging/windows/dist/*.exe packaging/linux/dist/* --clobber",
+  "bash \"$CBUILD_TOOL_ROOT/scripts/upload-release.sh\" \"v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER\" \"dist/macos/ColorwakeStudio-*.dmg\" \"packaging/windows/dist/*.exe\" \"packaging/linux/dist/*.deb\" \"packaging/linux/dist/*.rpm\" \"packaging/linux/dist/*.flatpak\"",
 ]
 
 # ── Self-hosted package repositories (apt / yum / flatpak) ──────────────────

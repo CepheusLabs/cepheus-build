@@ -97,8 +97,11 @@ if [ -z "${APT_REPO_TARGET:-}" ]; then
 fi
 
 echo "==> Uploading repo to $APT_REPO_TARGET"
+# No --delete: package repos accumulate versions, and a shared target may also
+# host sibling products. Deleting remote files would break older installs and
+# wipe other products' artifacts.
 case "$APT_REPO_TARGET" in
-  s3://*) aws s3 sync "$REPO_ROOT/" "$APT_REPO_TARGET/" --delete ;;
-  *)      rsync -az --delete "$REPO_ROOT/" "$APT_REPO_TARGET/" ;;
+  s3://*) aws s3 sync "$REPO_ROOT/" "$APT_REPO_TARGET/" ;;
+  *)      rsync -az "$REPO_ROOT/" "$APT_REPO_TARGET/" ;;
 esac
 echo "==> Published apt repo."

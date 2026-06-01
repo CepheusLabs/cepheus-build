@@ -68,8 +68,12 @@ fi
 
 # Sign repomd.xml so dnf can verify metadata (repo_gpgcheck=1).
 if key_id="$(ensure_gpg_key 2>/dev/null)"; then
+  # Array form: an unquoted ${VAR:+...} would word-split a passphrase with spaces.
+  pass_args=()
+  [ -n "${GPG_SIGNING_KEY_PASSPHRASE:-}" ] && \
+    pass_args=(--pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSPHRASE")
   gpg --batch --yes --armor --detach-sign --local-user "$key_id" \
-    ${GPG_SIGNING_KEY_PASSPHRASE:+--pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSPHRASE"} \
+    ${pass_args[@]+"${pass_args[@]}"} \
     --output "$REPO_ROOT/repodata/repomd.xml.asc" "$REPO_ROOT/repodata/repomd.xml"
 fi
 
@@ -80,8 +84,10 @@ if [ -z "${YUM_REPO_TARGET:-}" ]; then
 fi
 
 echo "==> Uploading repo to $YUM_REPO_TARGET"
+# No --delete: yum repos accumulate versions and a shared target may host
+# sibling products; deleting remote files would break older installs.
 case "$YUM_REPO_TARGET" in
-  s3://*) aws s3 sync "$REPO_ROOT/" "$YUM_REPO_TARGET/" --delete ;;
-  *)      rsync -az --delete "$REPO_ROOT/" "$YUM_REPO_TARGET/" ;;
+  s3://*) aws s3 sync "$REPO_ROOT/" "$YUM_REPO_TARGET/" ;;
+  *)      rsync -az "$REPO_ROOT/" "$YUM_REPO_TARGET/" ;;
 esac
 echo "==> Published yum repo."

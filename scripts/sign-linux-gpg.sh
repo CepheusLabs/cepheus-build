@@ -95,7 +95,9 @@ main() {
   if [ -z "${GPG_SIGNING_KEY:-}" ]; then
     echo "warning: GPG_SIGNING_KEY unset — leaving Linux artifact(s) UNSIGNED." >&2
     if [ "$import_only" -eq 0 ]; then
-      for f in "${files[@]}"; do echo "    $f" >&2; done
+      # ${arr[@]+...} guards an empty array under `set -u` on bash 3.2 (macOS),
+      # where a bare "${files[@]}" would abort with "unbound variable".
+      for f in ${files[@]+"${files[@]}"}; do echo "    $f" >&2; done
     fi
     echo "warning: set GPG_SIGNING_KEY to enable signing (no code change needed)." >&2
     exit 0
@@ -103,7 +105,7 @@ main() {
 
   if is_dry_run; then
     echo "[dry-run] Would import GPG_SIGNING_KEY and detached-sign:"
-    for f in "${files[@]}"; do echo "  $f -> ${f}.asc"; done
+    for f in ${files[@]+"${files[@]}"}; do echo "  $f -> ${f}.asc"; done
     echo "[dry-run] No signing performed."
     exit 0
   fi
@@ -120,7 +122,7 @@ main() {
     exit 0
   fi
 
-  for f in "${files[@]}"; do
+  for f in ${files[@]+"${files[@]}"}; do
     [ -f "$f" ] || { echo "error: file to sign not found: $f" >&2; exit 1; }
     echo "==> Signing $f -> ${f}.asc"
     gpg_sign_detached "$key_id" "$f"

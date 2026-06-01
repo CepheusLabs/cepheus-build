@@ -91,14 +91,27 @@ $env:AZURE_TENANT_ID     = $TenantId
 $env:AZURE_CLIENT_ID     = $ClientId
 $env:AZURE_CLIENT_SECRET = $ClientSecret
 
-# Ensure the `sign` tool is available; install it pinned if not.
-$signCmd = Get-Command sign -ErrorAction SilentlyContinue
-if (-not $signCmd) {
+# Ensure the `sign` tool is available, installing it pinned if needed.
+# Put the global-tools dir on PATH *before* probing: on a warm or self-hosted
+# runner the tool may already be installed but absent from this process's PATH,
+# and `dotnet tool install` errors with "already installed" in that case.
+$toolsPath = Join-Path $env:USERPROFILE ".dotnet\tools"
+if ((Test-Path $toolsPath) -and ($env:PATH -notlike "*$toolsPath*")) {
+  $env:PATH = "$toolsPath;$env:PATH"
+}
+if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
   Write-Host "==> Installing dotnet 'sign' tool ($SignToolVersion)"
   & dotnet tool install --global sign --version $SignToolVersion
-  if ($LASTEXITCODE -ne 0) { throw "Failed to install the 'sign' tool" }
-  $toolsPath = Join-Path $env:USERPROFILE ".dotnet\tools"
-  if (Test-Path $toolsPath) { $env:PATH = "$toolsPath;$env:PATH" }
+  if ($LASTEXITCODE -ne 0) {
+    # Already-installed or partial: update is idempotent and recovers both.
+    & dotnet tool update --global sign --version $SignToolVersion
+  }
+  if ((Test-Path $toolsPath) -and ($env:PATH -notlike "*$toolsPath*")) {
+    $env:PATH = "$toolsPath;$env:PATH"
+  }
+  if (-not (Get-Command sign -ErrorAction SilentlyContinue)) {
+    throw "Failed to install the 'sign' tool"
+  }
 }
 
 foreach ($f in $files) {
