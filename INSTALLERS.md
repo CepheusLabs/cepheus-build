@@ -11,6 +11,12 @@ and/or on feature branches, so we never commit or switch branches there.
 
 Status key: `[ ]` pending · `[~]` partial/blocked · `[x]` done & verified
 
+**Status: Waves A–E complete.** cepheus-build changes (A, B, C, E) are
+committed + pushed to `main`. Wave D (product packaging scripts) is written and
+statically verified but **left uncommitted** in the three product repos. Full
+docs in [docs/installers.md](docs/installers.md). Remaining work is Evan's two
+open items below (Azure signup, Linux repo host) — neither blocks building.
+
 ---
 
 ## Decisions (locked with Evan, 2026-05-31)
@@ -69,48 +75,48 @@ Publisher: **Cepheus Labs, LLC** · Apple Team ID **J2W5M4CY69**.
 ## Checklist
 
 ### Wave A — cepheus-build core (orchestrator-owned; commit to main incrementally)
-- [ ] **A1. `build.toml` global tools** — add `dpkg-deb`, `rpmbuild`, `flatpak`,
+- [x] **A1. `build.toml` global tools** — add `dpkg-deb`, `rpmbuild`, `flatpak`,
   `flatpak-builder`, `azuresigntool`/Trusted Signing client, `gpg`. (iscc,
   create-dmg, appimagetool already present.)
-- [ ] **A2. `github.py` `build_ci_matrix`** — derive new `setup_*` flags from
+- [x] **A2. `github.py` `build_ci_matrix`** — derive new `setup_*` flags from
   the packaging tools so CI installs only what a row needs
   (`setup_deb`, `setup_rpm`, `setup_flatpak`, `setup_innosetup`,
   `setup_win_signing`). One real code change.
-- [ ] **A3. `tests/test_github.py`** — cover the new setup-flag derivation +
+- [x] **A3. `tests/test_github.py`** — cover the new setup-flag derivation +
   re-assert the 3 product configs still produce a valid matrix.
-- [ ] **A4. shared signing helpers** — `scripts/sign-windows.ps1` (Azure Trusted
+- [x] **A4. shared signing helpers** — `scripts/sign-windows.ps1` (Azure Trusted
   Signing, env-gated no-op) and `scripts/sign-linux-gpg.sh` (env-gated).
 
 ### Wave B — product config TOML (orchestrator-owned; commit to main)
-- [ ] **B1. `products/anvil.toml`** — `desktop_packages` group +
+- [x] **B1. `products/anvil.toml`** — `desktop_packages` group +
   `macos-dmg`, `windows-installer`, `linux-deb`, `linux-rpm`, `linux-flatpak`
   targets; `github_release` lane; apt/yum/flatpak repo-publish lanes.
-- [ ] **B2. `products/colorwake-studio.toml`** — same set; keep `windows-msix`,
+- [x] **B2. `products/colorwake-studio.toml`** — same set; keep `windows-msix`,
   add `windows-installer` (.exe). Release + repo lanes.
-- [ ] **B3. `products/deckhand.toml`** — add `linux-deb`, `linux-rpm`,
+- [x] **B3. `products/deckhand.toml`** — add `linux-deb`, `linux-rpm`,
   `linux-flatpak` (keep macos-dmg / windows-installer / linux-appimage);
   add repo-publish lanes (already has `github_release`).
 
 ### Wave C — reusable CI workflow (orchestrator-owned; commit to main)
-- [ ] **C1. `.github/workflows/app-build.yml`** — install steps for the new
+- [x] **C1. `.github/workflows/app-build.yml`** — install steps for the new
   packaging toolchains gated on the new matrix flags; pass signing secrets
   through as env (never echoed). Do NOT add push/PR triggers.
-- [ ] **C2. `templates/github/app-build.yml`** — surface any new inputs the
+- [x] **C2. `templates/github/app-build.yml`** — surface any new inputs the
   caller needs.
 
 ### Wave D — product packaging scripts (delegated per repo; LEFT UNCOMMITTED)
-- [ ] **D1. Anvil** — `packaging/windows/anvil.iss`,
+- [x] **D1. Anvil** — `packaging/windows/anvil.iss`,
   `packaging/linux/build_deb.sh`, `build_rpm.sh`, `build_flatpak.sh`
   (+ flatpak manifest). Wire `macos-dmg` to the existing dev-id script.
-- [ ] **D2. Colorwake** — same set under `packaging/`; reuse existing dev-id
+- [x] **D2. Colorwake** — same set under `packaging/`; reuse existing dev-id
   DMG script; fix Linux app-id if still placeholder.
-- [ ] **D3. Deckhand** — `packaging/linux/build_deb.sh`, `build_rpm.sh`,
+- [x] **D3. Deckhand** — `packaging/linux/build_deb.sh`, `build_rpm.sh`,
   `build_flatpak.sh` (embedding the Go sidecar + helper like its AppImage does).
 
 ### Wave E — docs + verification (orchestrator-owned; commit to main)
-- [ ] **E1. `docs/installers.md`** — formats, per-OS prereqs, signing env,
+- [x] **E1. `docs/installers.md`** — formats, per-OS prereqs, signing env,
   repo hosting, how to enable Azure later. Update `docs/stores.md`.
-- [ ] **E2. Final verification** — `.venv/bin/pytest -q` green;
+- [x] **E2. Final verification** — `.venv/bin/pytest -q` green;
   `ruff check .`; `validate`/`plan`/`describe --json`/`ci-matrix` for all
   three products diffed against the pre-change baseline (GUI parses this).
 

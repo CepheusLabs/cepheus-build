@@ -53,3 +53,10 @@ lane or from their own release workflow. Deckhand is the first product config
 that models this because it ships desktop installers rather than mobile-store
 builds.
 
+## Desktop installers + package repositories
+
+Native installers (`.dmg` / `.exe` / `.deb` / `.rpm` / Flatpak), their code
+signing (Azure Trusted Signing, macOS Developer ID, GPG), the
+`github_release` lane, and the self-hosted `apt_repo` / `yum_repo` /
+`flatpak_repo` lanes are documented in [`installers.md`](installers.md).
+
