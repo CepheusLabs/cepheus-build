@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cepheus_build.commands import _deps_repo_root
+from cepheus_build.config import ProductConfig
 from cepheus_build.dependency_model import dependency_outputs, missing_local_paths
 
 
@@ -47,3 +49,22 @@ def test_missing_local_paths_reports_absent_package_roots(tmp_path: Path) -> Non
 
     assert tmp_path / "forge" in missing
     assert tmp_path / "printdeck_product_platform" in missing
+
+
+def test_deps_repo_root_prefers_workspace_product_checkout(tmp_path: Path) -> None:
+    workspace_root = tmp_path
+    product_root = workspace_root / "colorwake-studio"
+    config_dir = product_root / "shared" / "cepheus-build" / "products"
+    config_dir.mkdir(parents=True)
+    product_root.mkdir(exist_ok=True)
+    config = ProductConfig(
+        path=config_dir / "colorwake-studio.toml",
+        data={
+            "product": {
+                "slug": "colorwake-studio",
+                "repo_root": "../../colorwake-studio",
+            }
+        },
+    )
+
+    assert _deps_repo_root(config, workspace_root) == product_root.resolve()

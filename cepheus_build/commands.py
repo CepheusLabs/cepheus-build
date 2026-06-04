@@ -323,11 +323,19 @@ def cmd_install_deps(args: argparse.Namespace) -> int:
     )
 
 
+def _deps_repo_root(config: ProductConfig, workspace_root: Path) -> Path:
+    workspace_checkout = (workspace_root / config.slug).resolve()
+    if workspace_checkout.exists():
+        return workspace_checkout
+    return config.repo_root
+
+
 def cmd_deps(args: argparse.Namespace) -> int:
     config = load_product(args)
     workspace_root = Path(args.workspace_root).expanduser().resolve() if args.workspace_root else config.repo_root.parent
+    repo_root = _deps_repo_root(config, workspace_root)
     try:
-        outputs = dependency_outputs(config.slug, config.repo_root, workspace_root)
+        outputs = dependency_outputs(config.slug, repo_root, workspace_root)
         missing = missing_local_paths(config.slug, workspace_root)
     except KeyError as exc:
         raise BuildError(str(exc)) from exc
@@ -369,7 +377,7 @@ def cmd_deps(args: argparse.Namespace) -> int:
         return 0 if ok else 1
 
     print(f"{config.display_name} ({config.slug})")
-    print(f"  repo:           {config.repo_root}")
+    print(f"  repo:           {repo_root}")
     print(f"  workspace_root: {workspace_root}")
     for row in rows:
         status = "ok" if row["matches"] else ("write" if args.write else "stale/missing")
