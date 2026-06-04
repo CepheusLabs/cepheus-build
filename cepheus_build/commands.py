@@ -26,6 +26,7 @@ from .config import (
     normalize_hosts,
     resolve_path,
 )
+from .dependency_model import dependency_outputs, missing_local_paths
 from .environment import build_env
 from .errors import BuildError
 from .github import (
@@ -320,6 +321,68 @@ def cmd_install_deps(args: argparse.Namespace) -> int:
         skip_existing=args.skip_existing,
         skip_unsupported=args.skip_unsupported,
     )
+
+
+def cmd_deps(args: argparse.Namespace) -> int:
+    config = load_product(args)
+    workspace_root = Path(args.workspace_root).expanduser().resolve() if args.workspace_root else config.repo_root.parent
+    try:
+        outputs = dependency_outputs(config.slug, config.repo_root, workspace_root)
+        missing = missing_local_paths(config.slug, workspace_root)
+    except KeyError as exc:
+        raise BuildError(str(exc)) from exc
+
+    rows = []
+    changed = False
+    for output in outputs:
+        current = output.path.read_text() if output.path.exists() else None
+        matches = current == output.content
+        if args.write and not matches:
+            output.path.parent.mkdir(parents=True, exist_ok=True)
+            output.path.write_text(output.content)
+            current = output.content
+            matches = True
+        changed = changed or not matches
+        rows.append(
+            {
+                "kind": output.kind,
+                "path": str(output.path),
+                "exists": output.path.exists(),
+                "matches": matches,
+            }
+        )
+
+    ok = not missing and not changed
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "product": config.slug,
+                    "workspace_root": str(workspace_root),
+                    "ok": ok,
+                    "written": bool(args.write),
+                    "outputs": rows,
+                    "missing_local_paths": [str(path) for path in missing],
+                }
+            )
+        )
+        return 0 if ok else 1
+
+    print(f"{config.display_name} ({config.slug})")
+    print(f"  repo:           {config.repo_root}")
+    print(f"  workspace_root: {workspace_root}")
+    for row in rows:
+        status = "ok" if row["matches"] else ("write" if args.write else "stale/missing")
+        print(f"{status}: {row['path']}")
+    if missing:
+        print("missing local package paths:")
+        for path in missing:
+            print(f"  - {path}")
+    elif args.write:
+        print("local dependency override files are current")
+    else:
+        print("run with --write to create/update ignored local override files")
+    return 0 if ok else 1
 
 
 def command_failure_message(exc: Exception) -> str:

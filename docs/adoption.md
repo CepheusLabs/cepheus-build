@@ -1,6 +1,19 @@
 # Adoption
 
-## Add As A Submodule
+## Preferred: Use As A Sibling Checkout
+
+Keep `cepheus-build` beside product repos and invoke it directly:
+
+```bash
+../cepheus-build/bin/cepheus-build deps -p printdeck --repo-root "$PWD" --write
+../cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
+```
+
+`deps --write` creates ignored local override files for first-party packages.
+This is the replacement path for recursive first-party submodules; see
+[`dependencies.md`](dependencies.md).
+
+## Legacy: Add As A Submodule
 
 Use the same path in every app repo:
 

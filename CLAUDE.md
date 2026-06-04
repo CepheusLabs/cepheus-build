@@ -24,6 +24,7 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 ./bin/cepheus-build --version                               # Print toolkit version
 ./bin/cepheus-build list                                    # List known products
 ./bin/cepheus-build list --json                             # Same, JSON output
+./bin/cepheus-build deps -p <product> --write               # Write ignored local first-party overrides
 ./bin/cepheus-build plan -p <product> <targets>             # Preview build plan (no execution)
 ./bin/cepheus-build plan -p <product> <targets> --json      # Same, JSON output
 ./bin/cepheus-build stamp -p <product>                      # Print the resolved version stamp
@@ -77,6 +78,7 @@ Single-file CLI (~1500 lines, argparse). Per-subcommand `cmd_*` functions are wi
 - **`augment_process_path()`** — prepends `~/.cargo/bin`, `~/.pub-cache/bin`, `~/.local/bin`, Homebrew, and the Docker.app bin dir to `PATH` on every run, so tools installed mid-build (e.g. via `--install-missing-deps`) are found by later targets in the same run.
 - **Tool checking** — tools are defined globally in `build.toml` with `hint`, optional `binary`, platform-specific `check` command, and `install` hints. `tool_status()` reports presence; `require_target_tools()` blocks a build on missing tools (unless `--no-check-tools`). `buildroot` is a `VIRTUAL_TOOL` (always "ok"). When `doctor` finds missing tools it prints a hint suggesting `install-deps`.
 - **`describe` subcommand** — machine-readable introspection: `describe --json` lists all products and runner profiles; `describe -p <product> --json` emits a full JSON object with slug, display_name, repo_root, app_dir, github config, groups, targets (with hosts/tools/enabled), stores (with enabled/hosts/required_env), target_choices, and runner_profiles. The GUI uses this instead of parsing TOML directly. `list`, `plan`, and `doctor` also accept `--json` for structured output.
+- **`deps` subcommand** — writes/checks ignored local first-party dependency overrides from `cepheus_build/dependency_model.py`: Flutter `pubspec_overrides.yaml` beside app pubspecs and Go `go.work` beside host modules. This supports the sibling-checkout workflow while product manifests move away from recursive first-party submodules.
 - **Build sync controls** — `--no-sync` skips the pre-build `git pull`/submodule update; `--require-clean` aborts if the product working tree has uncommitted changes. Default is sync on, no clean check. `--dry-run` always skips sync regardless of `--no-sync`.
 
 ### The `CBUILD_*` environment contract (CLI ↔ product TOML)
@@ -125,7 +127,7 @@ GitHub execution mode (`build --execution-mode github`) does **not** run the mat
 ## Key Patterns
 
 - Build/store commands run in the **product's** repo (`repo_root`/`cwd`), not this repo.
-- Real local builds first auto-sync the product checkout: fast-forward-only `git pull --recurse-submodules` then `submodule update --init --recursive` (`sync_repo_before_build()`). `--dry-run` does not mutate the checkout.
+- Real local builds first auto-sync the product checkout: fast-forward-only `git pull --recurse-submodules` then `submodule update --init --recursive` (`sync_repo_before_build()`). This remains for product repos that still carry submodules; the replacement workflow is sibling checkouts plus `cepheus-build deps --write`. `--dry-run` does not mutate the checkout.
 - `--skip-unsupported` (default true) skips wrong-host targets; `--keep-going` (default true) continues past a failed target and prints a summary at the end. `local-sweep` runs whole products one after another with the same flags.
 - `history/` holds run logs and a shared `build-history.json` the team commits when useful.
 

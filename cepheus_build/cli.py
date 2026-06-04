@@ -12,6 +12,7 @@ from .commands import (
     cmd_build,
     cmd_ci_matrix,
     cmd_deploy,
+    cmd_deps,
     cmd_describe,
     cmd_doctor,
     cmd_install_deps,
@@ -182,6 +183,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip targets that need another host OS. Defaults to true.",
     )
     install_deps.set_defaults(func=cmd_install_deps)
+
+    deps = sub.add_parser(
+        "deps",
+        help="Create/check ignored local overrides for first-party package checkouts.",
+    )
+    add_product_args(deps)
+    deps.add_argument(
+        "--workspace-root",
+        help="Directory containing sibling first-party checkouts. Defaults to the product repo's parent.",
+    )
+    deps.add_argument(
+        "--write",
+        action="store_true",
+        help="Write pubspec_overrides.yaml and go.work files. Without this, only checks current files.",
+    )
+    add_json_arg(deps)
+    deps.set_defaults(func=cmd_deps)
 
     build = sub.add_parser("build", help="Build product targets.")
     add_product_args(build)

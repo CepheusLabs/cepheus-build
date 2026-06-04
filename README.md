@@ -24,6 +24,7 @@ From a checkout beside the app repos:
 ```bash
 ./bin/cepheus-build --version
 ./bin/cepheus-build list
+./bin/cepheus-build deps -p printdeck --write
 ./bin/cepheus-build plan -p printdeck all
 ./bin/cepheus-build doctor -p anvil desktop
 ./bin/cepheus-build build -p colorwake-studio macos --install-missing-deps
@@ -51,9 +52,13 @@ missing tools before starting the build; Dry Run keeps to preview output only.
 The local build environment includes common user tool directories such as
 `~/.cargo/bin`, so tools installed during dependency setup are available to
 later targets in the same run.
+Use `cepheus-build deps -p <product> --write` to create ignored local
+`pubspec_overrides.yaml` / `go.work` files that point first-party packages at
+sibling checkouts. See `docs/dependencies.md`.
+
 Real local builds also update the product checkout first with a normal
-fast-forward-only `git pull` and recursive submodule update. Dry Run does not
-mutate the checkout.
+fast-forward-only `git pull`; products that still carry submodules also get the
+legacy recursive submodule refresh. Dry Run does not mutate the checkout.
 Foundry OS Docker targets need a running Docker-compatible engine. Docker
 Desktop is not required if `docker info` works through Docker Engine, Colima,
 OrbStack, Rancher Desktop, or another compatible daemon.
