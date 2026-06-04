@@ -20,4 +20,6 @@ jobs:
     # optional — unset ones just produce unsigned artifacts, so this is safe to
     # add before signing is configured. Set the secrets in the product repo's
     # Actions settings to turn signing on with no file change.
+    # CEPHEUS_READ_TOKEN is optional but recommended once product manifests use
+    # private first-party git refs instead of recursive submodules.
     secrets: inherit

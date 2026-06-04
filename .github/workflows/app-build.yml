@@ -111,6 +111,11 @@ on:
         required: false
       GPG_SIGNING_KEY_PASSPHRASE:
         required: false
+      # Optional org-scoped read token for private first-party package refs.
+      # Falls back to github.token, which is enough only when org policy grants
+      # this workflow access to the sibling private repos it fetches.
+      CEPHEUS_READ_TOKEN:
+        required: false
 
 # Opt into the Node 24 actions runtime now (GitHub forces it June 2026). The
 # toolkit itself uses no Node; this only affects the JS-based actions below.
@@ -193,6 +198,20 @@ jobs:
           repository: CepheusLabs/cepheus-build
           ref: ${{ inputs['toolkit-ref'] }}
           path: .cepheus-build
+
+      - name: Configure first-party package fetches
+        shell: bash
+        env:
+          CEPHEUS_READ_TOKEN: ${{ secrets.CEPHEUS_READ_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CEPHEUS_READ_TOKEN:-}" ]; then
+            git config --global url."https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/".insteadOf "git@github.com:"
+          fi
+          if command -v go >/dev/null 2>&1; then
+            go env -w GOPRIVATE=github.com/cepheuslabs/*,github.com/CepheusLabs/*
+          fi
 
       - name: Set up Flutter
         if: ${{ inputs['setup-flutter'] && matrix.setup_flutter }}

@@ -68,6 +68,23 @@ The target committed state is:
 - Local path overrides live only in generated ignored files.
 - Submodules remain only for exceptional pinned external forks or source drops.
 
+## CI Authentication
+
+Private first-party git refs need one Git credential setup step before Flutter or
+Go dependency resolution. The reusable `app-build` workflow configures this for
+callers:
+
+```bash
+git config --global \
+  url."https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/".insteadOf \
+  "https://github.com/"
+go env -w GOPRIVATE=github.com/cepheuslabs/*,github.com/CepheusLabs/*
+```
+
+Set a product secret named `CEPHEUS_READ_TOKEN` with read access to the sibling
+private repos. The workflow falls back to `github.token`, but that token is only
+enough when org policy grants it cross-repo read access.
+
 ## Checks
 
 Preview status without writing:
