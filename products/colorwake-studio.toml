@@ -11,6 +11,7 @@ env_prefix = "COLORWAKE"
 repository = "CepheusLabs/colorwake-studio"
 
 [groups]
+quality = ["fmt", "lint", "test"]
 desktop = ["macos", "windows", "linux"]
 # Direct-download installer set: dmg + .exe + deb/rpm/flatpak. The windows-msix
 # target still exists for the Microsoft Store (see the `stores` group and the
@@ -20,6 +21,24 @@ desktop_packages = ["macos-dmg", "windows-installer", "linux-deb", "linux-rpm", 
 mobile = ["ios", "android"]
 stores = ["ios", "macos", "android", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
+
+[targets.fmt]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh fmt"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 fmt"] }
+tools = { default = ["bash", "cargo"], windows = ["pwsh", "cargo"] }
+
+[targets.lint]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh lint"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 lint"] }
+tools = { default = ["bash", "cargo", "flutter"], windows = ["pwsh", "cargo", "flutter"] }
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh test"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 test"] }
+tools = { default = ["bash", "cargo", "flutter"], windows = ["pwsh", "cargo", "flutter"] }
 
 [targets.web]
 enabled = false

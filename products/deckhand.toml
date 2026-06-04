@@ -13,9 +13,28 @@ env_prefix = "DECKHAND"
 repository = "CepheusLabs/deckhand-app"
 
 [groups]
+quality = ["fmt", "lint", "test"]
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["macos-dmg", "windows-installer", "linux-appimage", "linux-deb", "linux-rpm", "linux-flatpak"]
 all = ["macos", "windows", "linux"]
+
+[targets.fmt]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh fmt"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 fmt"] }
+tools = { default = ["bash", "dart", "flutter"], windows = ["pwsh", "dart", "flutter"] }
+
+[targets.lint]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh lint"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 lint"] }
+tools = { default = ["bash", "dart", "flutter", "go"], windows = ["pwsh", "dart", "flutter", "go"] }
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh test"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 test"] }
+tools = { default = ["bash", "dart", "flutter", "git", "go", "python3"], windows = ["pwsh", "dart", "flutter", "git", "go", "python"] }
 
 [targets.macos]
 hosts = ["macos"]

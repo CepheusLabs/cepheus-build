@@ -11,12 +11,31 @@ env_prefix = "ANVIL"
 repository = "CepheusLabs/anvil"
 
 [groups]
+quality = ["fmt", "lint", "test"]
 desktop = ["macos", "windows", "linux"]
 # Distributable installers (signed where creds exist). Build with:
 #   cepheus-build build -p anvil desktop_packages
 desktop_packages = ["macos-dmg", "windows-installer", "linux-deb", "linux-rpm", "linux-flatpak"]
 mobile = ["ios", "android"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
+
+[targets.fmt]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh fmt"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 fmt"] }
+tools = { default = ["bash", "cargo"], windows = ["pwsh", "cargo"] }
+
+[targets.lint]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh lint"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 lint"] }
+tools = { default = ["bash", "cargo", "flutter", "flutter_rust_bridge_codegen"], windows = ["pwsh", "bash", "cargo", "flutter", "flutter_rust_bridge_codegen"] }
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = { default = ["bash scripts/quality.sh test"], windows = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/quality.ps1 test"] }
+tools = { default = ["bash", "cargo", "flutter", "go"], windows = ["pwsh", "cargo", "flutter", "go"] }
 
 [targets.web]
 enabled = false
