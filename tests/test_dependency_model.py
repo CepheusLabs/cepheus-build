@@ -113,6 +113,34 @@ def test_dependency_audit_rejects_unpinned_flutter_git_dependency(tmp_path: Path
     assert [issue.code for issue in issues] == ["first_party_flutter_unpinned_git_dependency"]
 
 
+def test_dependency_audit_rejects_committed_first_party_dependency_overrides(tmp_path: Path) -> None:
+    cases = (
+        ("anvil", "app/pubspec.yaml"),
+        ("colorwake-studio", "apps/colorwake_studio/pubspec.yaml"),
+    )
+    for product, pubspec in cases:
+        repo_root = tmp_path / product
+        pubspec_path = repo_root / pubspec
+        pubspec_path.parent.mkdir(parents=True)
+        pubspec_path.write_text(
+            """
+name: app
+dependencies:
+  forge:
+    git:
+      url: https://github.com/CepheusLabs/forge.git
+      ref: 0000000000000000000000000000000000000000
+dependency_overrides:
+  forge:
+    path: ../../forge
+""".lstrip()
+        )
+
+        issues = dependency_audit_issues(product, repo_root)
+
+        assert [issue.code for issue in issues] == ["first_party_flutter_dependency_override"]
+
+
 def test_dependency_audit_rejects_committed_go_local_replace(tmp_path: Path) -> None:
     repo_root = tmp_path / "printdeck"
     _write_printdeck_committed_manifests(

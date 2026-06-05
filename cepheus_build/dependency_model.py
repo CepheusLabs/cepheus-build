@@ -54,6 +54,12 @@ class DependencyAuditIssue:
     message: str
 
 
+@dataclass(frozen=True)
+class _YamlDependencyBlock:
+    section: str | None
+    lines: list[str]
+
+
 FLUTTER_PACKAGES: dict[str, FirstPartyPackage] = {
     "forge": FirstPartyPackage("forge"),
     "helm_client": FirstPartyPackage("helm", "sdks/dart"),
@@ -349,43 +355,60 @@ def _audit_flutter_manifest(pubspec_path: Path, package_names: tuple[str, ...]) 
     lines = pubspec_path.read_text().splitlines()
     issues: list[DependencyAuditIssue] = []
     for package_name in package_names:
-        block = _yaml_dependency_block(lines, package_name)
-        if not block:
-            continue
-        block_text = "\n".join(block)
-        if _yaml_block_has_immediate_key(block, "path"):
-            issues.append(
-                DependencyAuditIssue(
-                    path=pubspec_path,
-                    code="first_party_flutter_path_dependency",
-                    message=f"{package_name} uses a committed path dependency; use a pinned git ref in pubspec.yaml and local pubspec_overrides.yaml for sibling checkouts",
+        for block in _yaml_dependency_blocks(lines, package_name):
+            block_text = "\n".join(block.lines)
+            if block.section == "dependency_overrides":
+                issues.append(
+                    DependencyAuditIssue(
+                        path=pubspec_path,
+                        code="first_party_flutter_dependency_override",
+                        message=f"{package_name} is committed under dependency_overrides; use generated pubspec_overrides.yaml for sibling checkouts",
+                    )
                 )
-            )
-        if _yaml_block_has_key(block, "git") and not _yaml_block_has_key(block, "ref"):
-            issues.append(
-                DependencyAuditIssue(
-                    path=pubspec_path,
-                    code="first_party_flutter_unpinned_git_dependency",
-                    message=f"{package_name} uses git without an explicit ref",
+                continue
+            if _yaml_block_has_immediate_key(block.lines, "path"):
+                issues.append(
+                    DependencyAuditIssue(
+                        path=pubspec_path,
+                        code="first_party_flutter_path_dependency",
+                        message=f"{package_name} uses a committed path dependency; use a pinned git ref in pubspec.yaml and local pubspec_overrides.yaml for sibling checkouts",
+                    )
                 )
-            )
-        if "pubspec_overrides.yaml" in block_text:
-            issues.append(
-                DependencyAuditIssue(
-                    path=pubspec_path,
-                    code="first_party_flutter_override_reference",
-                    message=f"{package_name} references pubspec_overrides.yaml from a committed manifest",
+            if _yaml_block_has_key(block.lines, "git") and not _yaml_block_has_key(block.lines, "ref"):
+                issues.append(
+                    DependencyAuditIssue(
+                        path=pubspec_path,
+                        code="first_party_flutter_unpinned_git_dependency",
+                        message=f"{package_name} uses git without an explicit ref",
+                    )
                 )
-            )
+            if "pubspec_overrides.yaml" in block_text:
+                issues.append(
+                    DependencyAuditIssue(
+                        path=pubspec_path,
+                        code="first_party_flutter_override_reference",
+                        message=f"{package_name} references pubspec_overrides.yaml from a committed manifest",
+                    )
+                )
     return issues
 
 
-def _yaml_dependency_block(lines: list[str], package_name: str) -> list[str]:
+def _yaml_dependency_blocks(lines: list[str], package_name: str) -> list[_YamlDependencyBlock]:
+    blocks: list[_YamlDependencyBlock] = []
+    current_section: str | None = None
     for index, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("#") or not stripped.startswith(f"{package_name}:"):
+        if not stripped or stripped.startswith("#"):
             continue
         indent = len(line) - len(line.lstrip())
+        if current_section not in {"dependencies", "dev_dependencies", "dependency_overrides"}:
+            if indent == 0 and ":" in stripped:
+                current_section = stripped.split(":", 1)[0]
+            continue
+        if not stripped.startswith(f"{package_name}:"):
+            if indent == 0 and ":" in stripped:
+                current_section = stripped.split(":", 1)[0]
+            continue
         block = [line]
         for child in lines[index + 1 :]:
             child_stripped = child.strip()
@@ -396,8 +419,8 @@ def _yaml_dependency_block(lines: list[str], package_name: str) -> list[str]:
             if child_indent <= indent:
                 break
             block.append(child)
-        return block
-    return []
+        blocks.append(_YamlDependencyBlock(section=current_section, lines=block))
+    return blocks
 
 
 def _yaml_block_has_key(block: list[str], key: str) -> bool:
