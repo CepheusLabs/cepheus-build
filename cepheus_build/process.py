@@ -40,6 +40,11 @@ COCOAPODS_SPECS_REPAIR_PATTERNS = [
 COMMAND_OUTPUT_FAILURE_PATTERNS = [
     "Encountered error while creating the IPA:",
     "exportArchive Failed",
+    # Flutter desktop builds (notably Windows, where flutter.bat / the MSBuild
+    # link step can swallow the non-zero exit code) print this on failure while
+    # still returning 0. Detect the failure from the output so a broken build
+    # can't masquerade as success.
+    "Build process failed.",
 ]
 
 # Color is opt-out: a global override set from the CLI (``--no-color``) stacks on

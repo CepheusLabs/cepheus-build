@@ -80,7 +80,6 @@ tools = ["cargo", "flutter", "xcodebuild", "pod"]
 hosts = ["macos"]
 cwd = "."
 commands = [
-  "cargo build --release --workspace",
   "cd \"$CBUILD_APP_DIR\" && flutter pub get",
   "cd \"$CBUILD_APP_DIR\" && flutter build macos --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
 ]
@@ -91,7 +90,7 @@ tools = ["cargo", "flutter", "xcodebuild", "pod"]
 hosts = ["windows"]
 cwd = "."
 commands = [
-  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { cargo build --release --workspace; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }\"",
+  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }\"",
 ]
 artifacts = ["app/build/windows/x64/runner/Release"]
 tools = ["pwsh", "cargo", "flutter"]
@@ -100,7 +99,6 @@ tools = ["pwsh", "cargo", "flutter"]
 hosts = ["linux"]
 cwd = "."
 commands = [
-  "cargo build --release --workspace",
   "cd \"$CBUILD_APP_DIR\" && flutter pub get",
   "cd \"$CBUILD_APP_DIR\" && flutter build linux --release --build-name=\"$CBUILD_VERSION\" --build-number=\"$CBUILD_BUILD_NUMBER\"",
 ]
