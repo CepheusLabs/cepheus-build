@@ -33,6 +33,12 @@ class TestShouldTreatOutputAsFailure:
         output = "exportArchive Failed"
         assert should_treat_output_as_failure(output) is True
 
+    def test_matching_pattern_flutter_build_process_failed(self):
+        # Flutter desktop builds (notably Windows) can print this while still
+        # exiting 0, so the failure must be caught from the output.
+        output = "Building Windows application...  12.3s\nBuild process failed."
+        assert should_treat_output_as_failure(output) is True
+
     def test_all_patterns_match(self):
         for pattern in COMMAND_OUTPUT_FAILURE_PATTERNS:
             assert should_treat_output_as_failure(f"prefix {pattern} suffix") is True
