@@ -101,3 +101,15 @@ cepheus-build deps -p printdeck --json
 
 The command exits nonzero if local package paths are missing, or if generated
 files are stale when run without `--write`.
+
+Committed-manifest audit only, suitable for CI:
+
+```bash
+cepheus-build deps -p printdeck --audit-committed
+```
+
+This skips local override freshness and verifies the committed dependency
+model: first-party Flutter packages must not use committed `path:` entries,
+first-party `git:` dependencies need explicit `ref:` pins, Go modules must not
+commit local `replace` directives for first-party repos, and Cepheus submodules
+must be listed in the product's exceptional submodule allowlist.

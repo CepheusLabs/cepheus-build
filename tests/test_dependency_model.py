@@ -4,7 +4,11 @@ from pathlib import Path
 
 from cepheus_build.commands import _deps_repo_root
 from cepheus_build.config import ProductConfig
-from cepheus_build.dependency_model import dependency_outputs, missing_local_paths
+from cepheus_build.dependency_model import (
+    dependency_audit_issues,
+    dependency_outputs,
+    missing_local_paths,
+)
 
 
 def test_printdeck_outputs_flutter_and_go_files(tmp_path: Path) -> None:
@@ -68,3 +72,110 @@ def test_deps_repo_root_prefers_workspace_product_checkout(tmp_path: Path) -> No
     )
 
     assert _deps_repo_root(config, workspace_root) == product_root.resolve()
+
+
+def test_dependency_audit_accepts_printdeck_committed_model(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck"
+    _write_printdeck_committed_manifests(repo_root)
+
+    assert dependency_audit_issues("printdeck", repo_root) == []
+
+
+def test_dependency_audit_rejects_committed_flutter_path_dependency(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck"
+    _write_printdeck_committed_manifests(
+        repo_root,
+        pubspec_dependency="""
+  printdeck_stockpile:
+    path: ../../stockpile/clients/flutter
+""",
+    )
+
+    issues = dependency_audit_issues("printdeck", repo_root)
+
+    assert [issue.code for issue in issues] == ["first_party_flutter_path_dependency"]
+
+
+def test_dependency_audit_rejects_unpinned_flutter_git_dependency(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck"
+    _write_printdeck_committed_manifests(
+        repo_root,
+        pubspec_dependency="""
+  printdeck_stockpile:
+    git:
+      url: https://github.com/CepheusLabs/stockpile.git
+      path: clients/flutter
+""",
+    )
+
+    issues = dependency_audit_issues("printdeck", repo_root)
+
+    assert [issue.code for issue in issues] == ["first_party_flutter_unpinned_git_dependency"]
+
+
+def test_dependency_audit_rejects_committed_go_local_replace(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck"
+    _write_printdeck_committed_manifests(
+        repo_root,
+        go_replace="replace github.com/cepheuslabs/stockpile => ../../stockpile",
+    )
+
+    issues = dependency_audit_issues("printdeck", repo_root)
+
+    assert [issue.code for issue in issues] == ["first_party_go_local_replace"]
+
+
+def test_dependency_audit_rejects_unexpected_first_party_submodule(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck"
+    _write_printdeck_committed_manifests(
+        repo_root,
+        extra_gitmodule="""
+[submodule "clients/flutter/stockpile"]
+\tpath = clients/flutter/stockpile
+\turl = https://github.com/CepheusLabs/stockpile.git
+""",
+    )
+
+    issues = dependency_audit_issues("printdeck", repo_root)
+
+    assert [issue.code for issue in issues] == ["unexpected_first_party_submodule"]
+
+
+def _write_printdeck_committed_manifests(
+    repo_root: Path,
+    *,
+    pubspec_dependency: str = """
+  printdeck_stockpile:
+    git:
+      url: https://github.com/CepheusLabs/stockpile.git
+      ref: 0000000000000000000000000000000000000000
+      path: clients/flutter
+""",
+    go_replace: str = "",
+    extra_gitmodule: str = "",
+) -> None:
+    frontend = repo_root / "frontend"
+    backend = repo_root / "backend"
+    frontend.mkdir(parents=True)
+    backend.mkdir(parents=True)
+    (frontend / "pubspec.yaml").write_text(
+        "name: printdeck\n"
+        "dependencies:\n"
+        f"{pubspec_dependency.lstrip()}"
+    )
+    (backend / "go.mod").write_text(
+        "module github.com/CepheusLabs/printdeck\n\n"
+        "require github.com/cepheuslabs/stockpile v0.2.1\n"
+        f"{go_replace}\n"
+    )
+    (repo_root / ".gitmodules").write_text(
+        """
+[submodule "third_party/printdeck-ecosystem-contracts"]
+\tpath = third_party/printdeck-ecosystem-contracts
+\turl = https://github.com/CepheusLabs/printdeck-ecosystem-contracts.git
+[submodule "shared/cepheus-build"]
+\tpath = shared/cepheus-build
+\turl = ../cepheus-build.git
+"""
+        + extra_gitmodule
+    )

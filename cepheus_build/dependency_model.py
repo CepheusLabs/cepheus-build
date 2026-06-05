@@ -37,6 +37,7 @@ class GoWorkspace:
 class ProductDependencies:
     flutter: tuple[FlutterOverrides, ...] = ()
     go: tuple[GoWorkspace, ...] = ()
+    allowed_submodule_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,13 @@ class DependencyOutput:
     path: Path
     content: str
     kind: str
+
+
+@dataclass(frozen=True)
+class DependencyAuditIssue:
+    path: Path
+    code: str
+    message: str
 
 
 FLUTTER_PACKAGES: dict[str, FirstPartyPackage] = {
@@ -131,6 +139,10 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 modules=tuple(GO_MODULES),
             ),
         ),
+        allowed_submodule_paths=(
+            "shared/cepheus-build",
+            "third_party/printdeck-ecosystem-contracts",
+        ),
     ),
     "anvil": ProductDependencies(
         flutter=(
@@ -156,6 +168,13 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 ),
             ),
         ),
+        allowed_submodule_paths=(
+            "shared/cepheus-build",
+            "shared/gcode",
+            "shared/printdeck/ecosystem_contracts",
+            "shared/printdeck/rust-contracts",
+            "shared/printdeck/slicer-core",
+        ),
     ),
     "colorwake-studio": ProductDependencies(
         flutter=(
@@ -174,6 +193,14 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                     "printdeck_telescope",
                 ),
             ),
+        ),
+        allowed_submodule_paths=(
+            "shared/cepheus-build",
+            "shared/printdeck/color-composition",
+            "shared/printdeck/color-model",
+            "shared/printdeck/ecosystem_contracts",
+            "shared/printdeck/rust-contracts",
+            "shared/threemf",
         ),
     ),
     "deckhand": ProductDependencies(
@@ -194,6 +221,12 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 pubspec="apps/setup_ui_flutter/pubspec.yaml",
                 packages=("forge", "printdeck_product_platform"),
             ),
+        ),
+        allowed_submodule_paths=(
+            "marketplace/printdeck",
+            "shared/cepheus-build",
+            "shared/printdeck/ecosystem_contracts",
+            "shared/printdeck/rust-contracts",
         ),
     ),
 }
@@ -291,3 +324,177 @@ def missing_local_paths(product: str, workspace_root: Path) -> list[Path]:
     for target in deps.go:
         packages.update(GO_MODULES[name] for name in target.modules)
     return sorted(package.local_path(workspace_root) for package in packages if not package.local_path(workspace_root).exists())
+
+
+def dependency_audit_issues(product: str, repo_root: Path) -> list[DependencyAuditIssue]:
+    try:
+        deps = PRODUCT_DEPENDENCIES[product]
+    except KeyError as exc:
+        supported = ", ".join(sorted(PRODUCT_DEPENDENCIES))
+        raise KeyError(f"unsupported dependency product '{product}' (supported: {supported})") from exc
+
+    issues: list[DependencyAuditIssue] = []
+    for target in deps.flutter:
+        issues.extend(_audit_flutter_manifest(repo_root / target.pubspec, target.packages))
+    for target in deps.go:
+        issues.extend(_audit_go_mod(repo_root / target.module_root / "go.mod", target.modules))
+    issues.extend(_audit_gitmodules(repo_root / ".gitmodules", deps.allowed_submodule_paths))
+    return issues
+
+
+def _audit_flutter_manifest(pubspec_path: Path, package_names: tuple[str, ...]) -> list[DependencyAuditIssue]:
+    if not pubspec_path.exists():
+        return []
+
+    lines = pubspec_path.read_text().splitlines()
+    issues: list[DependencyAuditIssue] = []
+    for package_name in package_names:
+        block = _yaml_dependency_block(lines, package_name)
+        if not block:
+            continue
+        block_text = "\n".join(block)
+        if _yaml_block_has_immediate_key(block, "path"):
+            issues.append(
+                DependencyAuditIssue(
+                    path=pubspec_path,
+                    code="first_party_flutter_path_dependency",
+                    message=f"{package_name} uses a committed path dependency; use a pinned git ref in pubspec.yaml and local pubspec_overrides.yaml for sibling checkouts",
+                )
+            )
+        if _yaml_block_has_key(block, "git") and not _yaml_block_has_key(block, "ref"):
+            issues.append(
+                DependencyAuditIssue(
+                    path=pubspec_path,
+                    code="first_party_flutter_unpinned_git_dependency",
+                    message=f"{package_name} uses git without an explicit ref",
+                )
+            )
+        if "pubspec_overrides.yaml" in block_text:
+            issues.append(
+                DependencyAuditIssue(
+                    path=pubspec_path,
+                    code="first_party_flutter_override_reference",
+                    message=f"{package_name} references pubspec_overrides.yaml from a committed manifest",
+                )
+            )
+    return issues
+
+
+def _yaml_dependency_block(lines: list[str], package_name: str) -> list[str]:
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped.startswith(f"{package_name}:"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        block = [line]
+        for child in lines[index + 1 :]:
+            child_stripped = child.strip()
+            if not child_stripped or child_stripped.startswith("#"):
+                block.append(child)
+                continue
+            child_indent = len(child) - len(child.lstrip())
+            if child_indent <= indent:
+                break
+            block.append(child)
+        return block
+    return []
+
+
+def _yaml_block_has_key(block: list[str], key: str) -> bool:
+    return any(line.strip().startswith(f"{key}:") for line in block)
+
+
+def _yaml_block_has_immediate_key(block: list[str], key: str) -> bool:
+    if not block:
+        return False
+    root_indent = len(block[0]) - len(block[0].lstrip())
+    child_indents = [
+        len(line) - len(line.lstrip())
+        for line in block[1:]
+        if line.strip() and not line.strip().startswith("#") and len(line) - len(line.lstrip()) > root_indent
+    ]
+    if not child_indents:
+        return False
+    immediate_indent = min(child_indents)
+    return any(
+        line.strip().startswith(f"{key}:")
+        and len(line) - len(line.lstrip()) == immediate_indent
+        for line in block[1:]
+    )
+
+
+def _audit_go_mod(go_mod_path: Path, module_names: tuple[str, ...]) -> list[DependencyAuditIssue]:
+    if not go_mod_path.exists():
+        return []
+
+    first_party_modules = set(module_names)
+    issues: list[DependencyAuditIssue] = []
+    for line in go_mod_path.read_text().splitlines():
+        stripped = line.strip()
+        if "=>" not in stripped or stripped.startswith("//"):
+            continue
+        left, right = stripped.split("=>", 1)
+        left = left.removeprefix("replace").strip()
+        module = left.split()[0] if left.split() else ""
+        replacement = right.strip().split()[0] if right.strip().split() else ""
+        if module in first_party_modules and _is_local_path(replacement):
+            issues.append(
+                DependencyAuditIssue(
+                    path=go_mod_path,
+                    code="first_party_go_local_replace",
+                    message=f"{module} uses a committed local replace; use a pinned module version and generated go.work for sibling checkouts",
+                )
+            )
+    return issues
+
+
+def _is_local_path(value: str) -> bool:
+    return value.startswith(".") or value.startswith("/") or value.startswith("~")
+
+
+def _audit_gitmodules(gitmodules_path: Path, allowed_paths: tuple[str, ...]) -> list[DependencyAuditIssue]:
+    if not gitmodules_path.exists():
+        return []
+
+    allowed = set(allowed_paths)
+    issues: list[DependencyAuditIssue] = []
+    for submodule in _parse_gitmodules(gitmodules_path):
+        path = submodule.get("path", "")
+        url = submodule.get("url", "")
+        if path and _is_cepheus_submodule_url(url) and path not in allowed:
+            issues.append(
+                DependencyAuditIssue(
+                    path=gitmodules_path,
+                    code="unexpected_first_party_submodule",
+                    message=f"{path} is a Cepheus first-party submodule but is not in the product allowlist",
+                )
+            )
+    return issues
+
+
+def _parse_gitmodules(gitmodules_path: Path) -> list[dict[str, str]]:
+    submodules: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for line in gitmodules_path.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[submodule "):
+            if current:
+                submodules.append(current)
+            current = {}
+            continue
+        if current is not None and "=" in stripped:
+            key, value = stripped.split("=", 1)
+            current[key.strip()] = value.strip()
+    if current:
+        submodules.append(current)
+    return submodules
+
+
+def _is_cepheus_submodule_url(url: str) -> bool:
+    return (
+        url.startswith("../")
+        or "github.com/CepheusLabs/" in url
+        or "github.com/cepheuslabs/" in url
+    )

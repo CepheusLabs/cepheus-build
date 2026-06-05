@@ -26,7 +26,11 @@ from .config import (
     normalize_hosts,
     resolve_path,
 )
-from .dependency_model import dependency_outputs, missing_local_paths
+from .dependency_model import (
+    dependency_audit_issues,
+    dependency_outputs,
+    missing_local_paths,
+)
 from .environment import build_env
 from .errors import BuildError
 from .github import (
@@ -334,9 +338,11 @@ def cmd_deps(args: argparse.Namespace) -> int:
     config = load_product(args)
     workspace_root = Path(args.workspace_root).expanduser().resolve() if args.workspace_root else config.repo_root.parent
     repo_root = _deps_repo_root(config, workspace_root)
+    audit_committed = bool(getattr(args, "audit_committed", False))
     try:
-        outputs = dependency_outputs(config.slug, repo_root, workspace_root)
-        missing = missing_local_paths(config.slug, workspace_root)
+        audit_issues = dependency_audit_issues(config.slug, repo_root)
+        outputs = [] if audit_committed else dependency_outputs(config.slug, repo_root, workspace_root)
+        missing = [] if audit_committed else missing_local_paths(config.slug, workspace_root)
     except KeyError as exc:
         raise BuildError(str(exc)) from exc
 
@@ -360,7 +366,7 @@ def cmd_deps(args: argparse.Namespace) -> int:
             }
         )
 
-    ok = not missing and not changed
+    ok = not missing and not changed and not audit_issues
     if getattr(args, "json", False):
         print(
             json.dumps(
@@ -371,6 +377,14 @@ def cmd_deps(args: argparse.Namespace) -> int:
                     "written": bool(args.write),
                     "outputs": rows,
                     "missing_local_paths": [str(path) for path in missing],
+                    "committed_manifest_issues": [
+                        {
+                            "path": str(issue.path),
+                            "code": issue.code,
+                            "message": issue.message,
+                        }
+                        for issue in audit_issues
+                    ],
                 }
             )
         )
@@ -386,6 +400,12 @@ def cmd_deps(args: argparse.Namespace) -> int:
         print("missing local package paths:")
         for path in missing:
             print(f"  - {path}")
+    if audit_issues:
+        print("committed dependency model issues:")
+        for issue in audit_issues:
+            print(f"  - {issue.path}: {issue.code}: {issue.message}")
+    elif audit_committed:
+        print("committed dependency model is clean")
     elif args.write:
         print("local dependency override files are current")
     else:
