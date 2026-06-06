@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Release bridge for the desktop auto-updater: for each built artifact, compute
 # sha256 + EdDSA-sign, upload the bytes (and the .sig) to the R2 CDN bucket, then
-# register a release row with the control plane via POST /v1/admin/releases using
+# register a release row with the control plane via POST /api/v1/updates/admin/releases using
 # a printdeck.release-record/1 body.
 #
 # Phase-1 SCOPE (what this body actually does today): mac/win full installers
@@ -38,7 +38,7 @@
 #
 # Environment (set all to enable; the publish gate requires every one of these):
 #   CL_UPDATE_ED25519_PRIVATE_KEY   base64 32-byte seed (delegated to sign-update-eddsa.sh)
-#   CL_UPDATE_PUBLISH_TOKEN         bearer token for POST /v1/admin/releases
+#   CL_UPDATE_PUBLISH_TOKEN         bearer token for POST /api/v1/updates/admin/releases
 #   CL_UPDATE_API_BASE              control-plane base URL (default https://printdeck.app)
 #   R2_ACCOUNT_ID                   Cloudflare R2 account id (forms the upload endpoint; REQUIRED)
 #   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET   R2 credentials + bucket
@@ -123,7 +123,7 @@ main() {
     echo "[dry-run] Update-feed publish plan for $product $version+$build ($channel):"
     for f in ${files[@]+"${files[@]}"}; do
       local p; p="${platform_override:-$(platform_for "$f")}"
-      echo "  $f  ->  sha256 + EdDSA-sign  ->  upload ${cdn_base}/${product}/${channel}/${version}/$(basename "$f")  ->  POST ${api_base}/v1/admin/releases (platform=${p:-?})"
+      echo "  $f  ->  sha256 + EdDSA-sign  ->  upload ${cdn_base}/${product}/${channel}/${version}/$(basename "$f")  ->  POST ${api_base}/api/v1/updates/admin/releases (platform=${p:-?})"
     done
     echo "[dry-run] No network calls performed."
     exit 0
@@ -197,7 +197,7 @@ PY
     local size
     size="$(python3 -c 'import os,sys; print(os.path.getsize(sys.argv[1]))' "$f")"
 
-    echo "==> [$base_name] POST $api_base/v1/admin/releases"
+    echo "==> [$base_name] POST $api_base/api/v1/updates/admin/releases"
     # Build the release-record body in python (no secrets in argv), then POST it
     # with the bearer token read from the environment by curl.
     local body
@@ -243,7 +243,7 @@ PY
     # --fail makes curl exit non-zero on an HTTP error; the bearer token is read
     # from a 0600 temp file via -H @file (never in argv). Body via stdin (@-).
     printf '%s' "$body" | curl --fail --silent --show-error \
-      -X POST "$api_base/v1/admin/releases" \
+      -X POST "$api_base/api/v1/updates/admin/releases" \
       -H @"$auth_hdr_file" \
       -H "Content-Type: application/json" \
       --data-binary @- >/dev/null

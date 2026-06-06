@@ -168,13 +168,13 @@ service so release/CDN concerns stay out of core.
 The `releases` row model **is** the canonical `printdeck.release-record/1`
 schema — columns map 1:1 to its snake_case field names (no synonyms; it is
 always `ed_signature`, never `signature`/`sig`). The schema doubles as the
-`POST /v1/admin/releases` request body. See the frozen contract:
+`POST /api/v1/updates/admin/releases` request body. See the frozen contract:
 [`schemas/printdeck.release-record.v1.json`][rr] (full field set, types, enums,
 and required array in **Update Contracts v1 §0/§1**), and the golden
 [`goldens/distribution/release-record-anvil-macos.json`][rr-gold].
 
 The `update_events` telemetry table **is** the frozen
-[`printdeck.update-event/1`][ue] schema (the `POST /v1/update/events` body):
+[`printdeck.update-event/1`][ue] schema (the `POST /api/v1/updates/events` body):
 `install_id, product, channel, from_version, to_version, platform, arch, event, ts`
 where `event` is the telemetry enum in
 [`registry/update-distribution.json`][reg] (`check`, `offered`,
@@ -185,11 +185,11 @@ where `event` is the telemetry enum in
 
 | Method | Path | Who | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/update/{product}/{channel}/appcast.xml?platform=&arch=&current=&install_id=` | mac/win clients (Sparkle/WinSparkle) | Rendered, EdDSA-signed appcast honoring rollout + min-version |
-| `GET` | `/v1/update/{product}/check?channel=&platform=&arch=&current=&build=&install_id=` | linux-AppImage / Android | JSON decision (below) |
-| `POST` | `/v1/update/events` | all clients | Telemetry ingest (opt-out respected) |
-| `POST` | `/v1/admin/releases` | CI (bearer `CL_UPDATE_PUBLISH_TOKEN`) | Register a release after upload |
-| `PATCH`| `/v1/admin/releases/{id}` | ops | Set `rollout_pct` / `paused` / `mandatory` |
+| `GET` | `/api/v1/updates/{product}/{channel}/appcast-{macos,windows}.xml?current=&install_id=&build=` | mac/win clients (Sparkle/WinSparkle) | Rendered, EdDSA-signed appcast honoring rollout + min-version |
+| `GET` | `/api/v1/updates/{product}/check?channel=&platform=&arch=&current=&build=&install_id=` | linux-AppImage / Android | JSON decision (below) |
+| `POST` | `/api/v1/updates/events` | all clients | Telemetry ingest (opt-out respected) |
+| `POST` | `/api/v1/updates/admin/releases` | CI (bearer `CL_UPDATE_PUBLISH_TOKEN`) | Register a release after upload |
+| `PATCH`| `/api/v1/updates/admin/releases/{id}` | ops | Set `rollout_pct` / `paused` / `mandatory` |
 
 `/check` response — the server's rollout/min-version *decision* rendered to JSON
 for AppImage + Android. The shape is the frozen
@@ -286,7 +286,7 @@ New shared scripts (alongside `sign-linux-gpg.sh` / `sign-windows.ps1`):
 - `scripts/sign-update-eddsa.sh` — EdDSA-sign one artifact (env-gated; no key →
   warn + skip, same contract as the other signers).
 - `scripts/publish-update-feed.sh` — for each artifact: sha256 + EdDSA sign →
-  upload to R2 → `POST /v1/admin/releases`. (Fallback mode: render `appcast.xml`
+  upload to R2 → `POST /api/v1/updates/admin/releases`. (Fallback mode: render `appcast.xml`
   and attach to the GH release when the backend isn't reachable.)
 
 **Channel derivation:** `$CBUILD_CHANNEL` from the release trigger — release tag
@@ -442,7 +442,7 @@ v1** and live in the `printdeck-ecosystem-contracts` repo (validated by its
 **Schemas + XSD** (`printdeck-ecosystem-contracts/schemas/`):
 
 - [`printdeck.release-record.v1.json`][rr] — canonical release record; doubles
-  as the `POST /v1/admin/releases` body and the `releases` row model.
+  as the `POST /api/v1/updates/admin/releases` body and the `releases` row model.
 - [`printdeck.update-check-response.v1.json`][ucr] — the `GET /check` decision
   for AppImage + Android.
 - [`printdeck.update-event.v1.json`][ue] — the `POST /events` telemetry contract.
@@ -475,7 +475,7 @@ bridge rotation). The live public key is a placeholder there until keygen is run
 - [`verify-update-eddsa.sh`](../scripts/verify-update-eddsa.sh) — CI verify gate
   before publish.
 - [`publish-update-feed.sh`](../scripts/publish-update-feed.sh) — the Phase-1
-  supply bridge (sha256 + sign → R2 → `POST /v1/admin/releases`), wired as the
+  supply bridge (sha256 + sign → R2 → `POST /api/v1/updates/admin/releases`), wired as the
   `[stores.update_publish]` lane (`enabled=false`) in each product TOML.
 
 [rr]: ../../printdeck-ecosystem-contracts/schemas/printdeck.release-record.v1.json
