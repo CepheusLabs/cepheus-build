@@ -16,3 +16,8 @@ history/*/
 
 # local Claude Code harness state
 .claude/
+
+# Locally-generated auto-update Ed25519 private seeds (scripts/cl-update-keygen.sh).
+# The private seed must live ONLY in the CI secret CL_UPDATE_ED25519_PRIVATE_KEY;
+# never commit anything under keys/.
+keys/

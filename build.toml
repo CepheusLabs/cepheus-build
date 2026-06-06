@@ -97,6 +97,16 @@ hint = "PowerShell is built into Windows; otherwise install PowerShell and make 
 hint = "install CocoaPods with: brew install cocoapods"
 install = { macos = ["brew install cocoapods"] }
 
+# python3 + pynacl back the auto-update key tooling (scripts/cl-update-keygen.sh,
+# sign-update-eddsa.sh, verify-update-eddsa.sh, publish-update-feed.sh). pynacl
+# is a pip dependency, not a CLI, so the scripts check `python3 -c "import nacl"`
+# and hint to `python3 -m pip install pynacl` rather than there being a tool
+# entry for it. The check below confirms python3 is present AND pynacl imports.
+[tools.python3]
+hint = "install Python 3 and `python3 -m pip install pynacl` (auto-update EdDSA key tooling)"
+check = { default = ["command -v python3 >/dev/null 2>&1 && python3 -c 'import nacl' >/dev/null 2>&1"], windows = ["python -c \"import nacl\""] }
+install = { macos = ["brew install python && python3 -m pip install pynacl"], linux = ["python3 -m pip install pynacl"] }
+
 [tools.rustup]
 hint = "install Rust with rustup"
 

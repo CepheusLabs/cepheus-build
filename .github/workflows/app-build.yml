@@ -116,6 +116,24 @@ on:
       # this workflow access to the sibling private repos it fetches.
       CEPHEUS_READ_TOKEN:
         required: false
+      # Desktop auto-update — EdDSA signing key + R2/control-plane publish creds.
+      # ALL optional: when unset, sign-update-eddsa.sh leaves artifacts unsigned
+      # and publish-update-feed.sh skips upload/registration (warn + exit 0), so
+      # builds work before the update backend + bucket exist. GitHub masks these
+      # automatically; nothing here is ever echoed. CL_UPDATE_ED25519_PRIVATE_KEY
+      # is the base64 32-byte Ed25519 seed (from scripts/cl-update-keygen.sh).
+      CL_UPDATE_ED25519_PRIVATE_KEY:
+        required: false
+      CL_UPDATE_PUBLISH_TOKEN:
+        required: false
+      R2_ACCOUNT_ID:
+        required: false
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
+      R2_BUCKET:
+        required: false
 
 # Opt into the Node 24 actions runtime now (GitHub forces it June 2026). The
 # toolkit itself uses no Node; this only affects the JS-based actions below.
@@ -310,6 +328,14 @@ jobs:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_KEY_ID: ${{ secrets.GPG_SIGNING_KEY_ID }}
           GPG_SIGNING_KEY_PASSPHRASE: ${{ secrets.GPG_SIGNING_KEY_PASSPHRASE }}
+          # Desktop auto-update: EdDSA seed + R2/control-plane publish creds.
+          # Optional, masked, never echoed — unset means unsigned + no publish.
+          CL_UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.CL_UPDATE_ED25519_PRIVATE_KEY }}
+          CL_UPDATE_PUBLISH_TOKEN: ${{ secrets.CL_UPDATE_PUBLISH_TOKEN }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           set -euo pipefail
           PYTHON_BIN="$(command -v python3 || command -v python)"
