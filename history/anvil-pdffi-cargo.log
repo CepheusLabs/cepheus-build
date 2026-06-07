@@ -1,0 +1,341 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling libm v0.2.16
+   Compiling autocfg v1.5.0
+   Compiling serde_core v1.0.228
+   Compiling version_check v0.9.5
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling windows-link v0.2.1
+   Compiling semver v1.0.28
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling thiserror v2.0.18
+   Compiling typenum v1.20.0
+   Compiling zerocopy v0.8.48
+   Compiling smallvec v1.15.1
+   Compiling thiserror v1.0.69
+   Compiling syn v1.0.109
+   Compiling once_cell v1.21.4
+   Compiling pin-project-lite v0.2.17
+   Compiling crossbeam-utils v0.8.21
+   Compiling log v0.4.29
+   Compiling either v1.15.0
+   Compiling equivalent v1.0.2
+   Compiling cgmath v0.18.0
+   Compiling simd-adler32 v0.3.9
+   Compiling crc32fast v1.5.0
+   Compiling zmij v1.0.21
+   Compiling libc v0.2.185
+   Compiling cpufeatures v0.2.17
+   Compiling getrandom v0.2.17
+   Compiling rayon-core v1.13.0
+   Compiling itoa v1.0.18
+   Compiling serde_json v1.0.149
+   Compiling time-core v0.1.8
+   Compiling num-conv v0.2.1
+   Compiling rustc_version v0.4.1
+   Compiling tracing-core v0.1.36
+   Compiling rand_core v0.6.4
+   Compiling paste v1.0.15
+   Compiling powerfmt v0.2.0
+   Compiling subtle v2.6.1
+   Compiling zeroize v1.8.2
+   Compiling adler2 v2.0.1
+   Compiling getrandom v0.4.2
+   Compiling generic-array v0.14.7
+   Compiling proc-macro-error-attr v1.0.4
+   Compiling num-traits v0.2.19
+   Compiling proc-macro-error v1.0.4
+   Compiling cc v1.2.60
+   Compiling signature v2.2.0
+   Compiling miniz_oxide v0.8.9
+   Compiling matrixmultiply v0.3.10
+   Compiling curve25519-dalek v4.1.3
+   Compiling time-macros v0.2.27
+   Compiling parking_lot_core v0.9.12
+   Compiling zlib-rs v0.6.3
+   Compiling sha1_smol v1.0.1
+   Compiling rawpointer v0.2.1
+   Compiling base64 v0.22.1
+   Compiling byteorder v1.5.0
+   Compiling scopeguard v1.2.0
+   Compiling hashbrown v0.17.0
+   Compiling ed25519 v2.2.3
+   Compiling rustc-hash v2.1.2
+   Compiling aho-corasick v1.1.4
+   Compiling branches v0.3.0
+   Compiling rustc-hash v1.1.0
+   Compiling regex-syntax v0.8.10
+   Compiling lazy_static v1.5.0
+   Compiling pkg-config v0.3.33
+   Compiling lock_api v0.4.14
+   Compiling winnow v0.5.40
+   Compiling foldhash v0.2.0
+   Compiling bumpalo v3.20.2
+   Compiling allocator-api2 v0.2.21
+   Compiling convert_case v0.4.0
+   Compiling toml_datetime v0.6.11
+   Compiling itertools v0.13.0
+   Compiling robust v1.2.0
+   Compiling arrayvec v0.7.6
+   Compiling crossbeam-epoch v0.9.18
+   Compiling zopfli v0.8.3
+   Compiling parking_lot v0.12.5
+   Compiling syn v2.0.117
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling rclite v0.2.8
+   Compiling bitflags v2.11.1
+   Compiling array-macro v2.1.8
+   Compiling memchr v1.0.2
+   Compiling hashbrown v0.16.1
+   Compiling indexmap v2.14.0
+   Compiling minimal-lexical v0.2.1
+   Compiling typed-path v0.12.3
+   Compiling digest v0.10.7
+   Compiling nom v3.2.1
+   Compiling lzma-sys v0.1.20
+   Compiling crossbeam-deque v0.8.6
+   Compiling itertools v0.10.5
+   Compiling lz4_flex v0.7.5
+   Compiling base64 v0.13.1
+   Compiling sha2 v0.10.9
+   Compiling getrandom v0.3.4
+   Compiling heapless v0.8.0
+   Compiling nom v7.1.3
+   Compiling hash32 v0.3.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling blake3 v1.5.5
+   Compiling rand_core v0.10.1
+   Compiling constant_time_eq v0.3.1
+   Compiling i_tree v0.18.0
+   Compiling arrayref v0.3.9
+   Compiling cfg_aliases v0.1.1
+   Compiling rand v0.10.1
+   Compiling rand_pcg v0.10.2
+   Compiling sif-itree v0.4.1
+   Compiling windows_x86_64_msvc v0.52.6
+   Compiling float_next_after v2.0.0
+   Compiling rayon v1.12.0
+   Compiling flate2 v1.1.9
+   Compiling rand_core v0.9.5
+   Compiling fdeflate v0.3.7
+   Compiling windows-sys v0.61.2
+   Compiling khronos_api v3.1.0
+   Compiling libloading v0.8.9
+   Compiling deranged v0.5.8
+   Compiling uuid v1.23.1
+   Compiling regex-automata v0.4.14
+   Compiling toml_edit v0.19.15
+   Compiling i_float v1.16.0
+   Compiling geographiclib-rs v0.2.7
+   Compiling zip v8.5.1
+   Compiling windows-targets v0.52.6
+   Compiling windows_x86_64_msvc v0.48.5
+   Compiling windows-result v0.2.0
+   Compiling i_shape v1.18.0
+   Compiling zune-core v0.5.1
+   Compiling pxfm v0.1.29
+   Compiling xml-rs v0.8.28
+   Compiling approx v0.4.0
+   Compiling approx v0.5.1
+   Compiling num-integer v0.1.46
+   Compiling spade v2.15.1
+   Compiling chrono v0.4.44
+   Compiling float-cmp v0.9.0
+   Compiling rstar v0.12.2
+   Compiling earcut v0.4.5
+   Compiling ordered-float v5.3.0
+   Compiling vob v3.0.6
+   Compiling zune-jpeg v0.5.15
+   Compiling winapi-util v0.1.11
+   Compiling num-rational v0.4.2
+   Compiling stl_io v0.8.6
+   Compiling windows-strings v0.1.0
+   Compiling png v0.18.1
+   Compiling derive-new v0.5.9
+   Compiling num-derive v0.3.3
+   Compiling byteorder-lite v0.1.0
+   Compiling time v0.3.47
+   Compiling termcolor v1.4.1
+   Compiling gl_generator v0.14.0
+   Compiling windows-targets v0.48.5
+   Compiling naga v23.1.0
+   Compiling foldhash v0.1.5
+   Compiling khronos-egl v6.0.0
+   Compiling bit-vec v0.8.0
+   Compiling wasmparser v0.221.3
+   Compiling downcast-rs v1.2.1
+   Compiling proc-macro-crate v1.3.1
+   Compiling ash v0.38.0+1.3.281
+   Compiling unicode-width v0.1.14
+   Compiling wasmi_core v0.40.0
+   Compiling bit-set v0.8.0
+   Compiling hashbrown v0.15.5
+   Compiling windows-sys v0.48.0
+   Compiling wgpu-hal v23.0.1
+   Compiling gpu-alloc-types v0.3.0
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling spirv v0.3.0+sdk-1.3.268.0
+   Compiling codespan-reporting v0.11.1
+   Compiling glutin_wgl_sys v0.6.1
+   Compiling option-ext v0.2.0
+   Compiling presser v0.3.1
+   Compiling futures-sink v0.3.32
+   Compiling unicode-xid v0.2.6
+   Compiling regex v1.12.3
+   Compiling hexf-parse v0.2.1
+   Compiling futures-core v0.3.32
+   Compiling wasmi_ir v0.40.0
+   Compiling gpu-alloc v0.6.0
+   Compiling gpu-descriptor v0.3.2
+   Compiling futures-channel v0.3.32
+   Compiling i_key_sort v0.10.3
+   Compiling geo-types v0.7.19
+   Compiling zip v4.6.1
+   Compiling wgpu-core v23.0.1
+   Compiling Inflector v0.11.4
+   Compiling wgpu-types v23.0.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling futures-io v0.3.32
+   Compiling spin v0.9.8
+   Compiling anyhow v1.0.102
+   Compiling futures-task v0.3.32
+   Compiling renderdoc-sys v1.1.0
+   Compiling wasmi_collections v0.40.0
+   Compiling slab v0.4.12
+   Compiling raw-window-handle v0.6.2
+   Compiling litrs v1.0.0
+   Compiling profiling v1.0.17
+   Compiling i_overlay v4.5.2
+   Compiling multi-stash v0.2.0
+   Compiling rand_chacha v0.3.1
+   Compiling rand_chacha v0.9.0
+   Compiling dirs-sys v0.4.1
+   Compiling range-alloc v0.1.5
+   Compiling glow v0.14.2
+   Compiling serde_derive v1.0.228
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling thiserror-impl v1.0.69
+   Compiling katexit v0.1.5
+   Compiling tracing-attributes v0.1.31
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling pd-profile-derive v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-profile-derive)
+   Compiling nalgebra-macros v0.2.2
+   Compiling truck-derivers v0.1.0
+   Compiling derive_more v0.99.20
+   Compiling rand v0.8.6
+   Compiling ruststep-derive v0.4.0
+   Compiling rand v0.9.4
+   Compiling windows-interface v0.58.0
+   Compiling windows-implement v0.58.0
+   Compiling futures-macro v0.3.32
+   Compiling document-features v0.2.12
+   Compiling dirs v5.0.1
+   Compiling wgpu v23.0.1
+   Compiling dart-sys v4.1.5
+   Compiling rustc-demangle v0.1.27
+   Compiling portable-atomic v1.13.1
+   Compiling build-target v0.4.0
+   Compiling bitflags v1.3.2
+   Compiling windows-core v0.58.0
+   Compiling md-5 v0.10.6
+   Compiling backtrace v0.3.76
+   Compiling png v0.17.16
+   Compiling matchers v0.2.0
+   Compiling futures-util v0.3.32
+   Compiling bytemuck v1.25.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling sharded-slab v0.1.7
+   Compiling tracing v0.1.44
+   Compiling tracing-log v0.2.0
+   Compiling flutter_rust_bridge v2.7.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\vendor\flutter_rust_bridge-2.7.0)
+   Compiling tokio v1.52.1
+   Compiling thread_local v1.1.9
+   Compiling cpp_map v0.2.0
+   Compiling moxcms v0.8.1
+   Compiling num_cpus v1.17.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling geo v0.33.1
+   Compiling safe_arch v0.7.4
+   Compiling pd-geom v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-geom)
+   Compiling qoi v0.4.1
+   Compiling static_assertions v1.1.0
+   Compiling atomic v0.5.3
+   Compiling hex v0.4.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling windows v0.58.0
+   Compiling threadpool v1.8.1
+   Compiling delegate-attr v0.3.0
+   Compiling glam v0.29.3
+   Compiling allo-isolate v0.1.27
+   Compiling pd-ffi v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-ffi)
+   Compiling pollster v0.4.0
+   Compiling wide v0.7.33
+   Compiling flutter_rust_bridge_macros v2.7.0
+   Compiling wasmi v0.40.0
+   Compiling num-complex v0.4.6
+   Compiling printdeck-color v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\printdeck\rust-contracts\crates\printdeck-color)
+   Compiling printdeck-marketplace-contracts v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\printdeck\rust-contracts\crates\printdeck-marketplace-contracts)
+   Compiling quick-xml v0.39.2
+   Compiling quick-xml v0.22.0
+   Compiling ruststep v0.4.0
+   Compiling boostvoronoi v0.12.1
+   Compiling quick-xml v0.32.0
+   Compiling printdeck-color-model v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\printdeck\color-model)
+   Compiling printdeck-machine-capabilities v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\printdeck\rust-contracts\crates\printdeck-machine-capabilities)
+   Compiling simba v0.9.1
+   Compiling printdeck-color-composition v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\printdeck\color-composition)
+   Compiling matext4cgmath v0.1.0
+   Compiling threemf v0.1.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\shared\threemf\rust\threemf)
+   Compiling truck-base v0.5.0
+   Compiling truck-base v0.4.0
+   Compiling image v0.25.10
+   Compiling truck-geotrait v0.4.0
+   Compiling truck-geotrait v0.3.0
+   Compiling futures-executor v0.3.32
+   Compiling futures v0.3.32
+   Compiling truck-topology v0.5.0
+   Compiling truck-topology v0.6.0
+   Compiling truck-geometry v0.5.0
+   Compiling truck-polymesh v0.6.0
+   Compiling truck-modeling v0.6.0
+   Compiling nalgebra v0.33.3
+   Compiling pd-profile v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-profile)
+   Compiling truck-stepio v0.3.0
+   Compiling gpu-allocator v0.27.0
+   Compiling pd-store v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-store)
+   Compiling xz2 v0.1.7
+   Compiling vtkio v0.6.3
+   Compiling truck-meshalgo v0.4.0
+   Compiling pd-mesh v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-mesh)
+   Compiling pd-scene v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-scene)
+   Compiling pd-slice v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-slice)
+   Compiling pd-voronoi v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-voronoi)
+   Compiling pd-walls v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-walls)
+   Compiling pd-collide v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-collide)
+   Compiling pd-import v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-import)
+   Compiling pd-export v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-export)
+   Compiling pd-explode v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-explode)
+   Compiling pd-orient v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-orient)
+   Compiling pd-pick v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-pick)
+   Compiling pd-arrange v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-arrange)
+   Compiling pd-infill v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-infill)
+   Compiling pd-travel v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-travel)
+   Compiling pd-supports v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-supports)
+   Compiling pd-ops v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-ops)
+   Compiling pd-gcode v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-gcode)
+   Compiling pd-preview v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-preview)
+   Compiling pd-plugin v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-plugin)
+   Compiling pd-project v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-project)
+   Compiling pd-gpu v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-gpu)
+   Compiling pd-core-plugins v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-core-plugins)
+   Compiling pd-core v0.0.0 (D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core\core\pd-core)
+    Finished `release` profile [optimized] target(s) in 3m 10s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v3.2.1, quick-xml v0.22.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+CARGO_EXIT=0
