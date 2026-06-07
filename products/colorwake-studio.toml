@@ -41,12 +41,17 @@ commands = { default = ["bash scripts/quality.sh test"], windows = ["pwsh -NoPro
 tools = { default = ["bash", "cargo", "flutter"], windows = ["pwsh", "cargo", "flutter"] }
 
 [targets.web]
-enabled = false
+enabled = true
 hosts = ["linux", "macos", "windows"]
-flutter = "web"
-flutter_args = ["--no-wasm-dry-run"]
+commands = { default = [
+  "cargo build --release -p colorwake_worker",
+  "cd \"$CBUILD_APP_DIR\" && flutter pub get",
+  "cd \"$CBUILD_APP_DIR\" && flutter build web --release --no-wasm-dry-run --dart-define=COLORWAKE_PRODUCT_JOBS_BASE_URL=\"${COLORWAKE_PRODUCT_JOBS_BASE_URL:-http://127.0.0.1:8787/api/v1/product-jobs}\"",
+], windows = [
+  "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& { cargo build --release -p colorwake_worker; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build web --release --no-wasm-dry-run --dart-define=COLORWAKE_PRODUCT_JOBS_BASE_URL='http://127.0.0.1:8787/api/v1/product-jobs' }\"",
+] }
 artifacts = ["apps/colorwake_studio/build/web"]
-tools = ["flutter"]
+tools = { default = ["cargo", "flutter"], windows = ["pwsh", "cargo", "flutter"] }
 
 [targets.android]
 hosts = ["linux", "macos"]
