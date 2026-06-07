@@ -13,31 +13,22 @@ Keep `cepheus-build` beside product repos and invoke it directly:
 This is the replacement path for recursive first-party submodules; see
 [`dependencies.md`](dependencies.md).
 
-## Legacy: Add As A Submodule
-
-Use the same path in every app repo:
-
-```bash
-git submodule add https://github.com/CepheusLabs/cepheus-build.git shared/cepheus-build
-git commit -m "build: add shared Cepheus build toolkit"
-```
-
 ## Local Builds
 
 Local builds use the same product configs as CI. They run on the current
 machine and skip targets for other operating systems when asked:
 
 ```bash
-shared/cepheus-build/bin/cepheus-build plan -p printdeck --repo-root "$PWD" all
-shared/cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
+../cepheus-build/bin/cepheus-build plan -p printdeck --repo-root "$PWD" all
+../cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
 ```
 
 Build one target when you are on the right host:
 
 ```bash
-shared/cepheus-build/bin/cepheus-build build -p colorwake-studio --repo-root "$PWD" macos
-shared/cepheus-build/bin/cepheus-build build -p anvil --repo-root "$PWD" android
-shared/cepheus-build/bin/cepheus-build build -p deckhand --repo-root "$PWD" windows-installer
+../cepheus-build/bin/cepheus-build build -p colorwake-studio --repo-root "$PWD" macos
+../cepheus-build/bin/cepheus-build build -p anvil --repo-root "$PWD" android
+../cepheus-build/bin/cepheus-build build -p deckhand --repo-root "$PWD" windows-installer
 ```
 
 ## GitHub-Hosted Runners

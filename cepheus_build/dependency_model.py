@@ -37,7 +37,6 @@ class GoWorkspace:
 class ProductDependencies:
     flutter: tuple[FlutterOverrides, ...] = ()
     go: tuple[GoWorkspace, ...] = ()
-    allowed_submodule_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,6 +131,14 @@ PRINTDECK_FRONTEND_PACKAGES = (
 
 
 PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
+    "cepheus-build": ProductDependencies(
+        flutter=(
+            FlutterOverrides(
+                pubspec="app/pubspec.yaml",
+                packages=("forge",),
+            ),
+        ),
+    ),
     "printdeck": ProductDependencies(
         flutter=(
             FlutterOverrides(
@@ -144,10 +151,6 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 module_root="backend",
                 modules=tuple(GO_MODULES),
             ),
-        ),
-        allowed_submodule_paths=(
-            "shared/cepheus-build",
-            "third_party/printdeck-ecosystem-contracts",
         ),
     ),
     "anvil": ProductDependencies(
@@ -174,13 +177,6 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 ),
             ),
         ),
-        allowed_submodule_paths=(
-            "shared/cepheus-build",
-            "shared/gcode",
-            "shared/printdeck/ecosystem_contracts",
-            "shared/printdeck/rust-contracts",
-            "shared/printdeck/slicer-core",
-        ),
     ),
     "colorwake-studio": ProductDependencies(
         flutter=(
@@ -199,14 +195,6 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                     "printdeck_telescope",
                 ),
             ),
-        ),
-        allowed_submodule_paths=(
-            "shared/cepheus-build",
-            "shared/printdeck/color-composition",
-            "shared/printdeck/color-model",
-            "shared/printdeck/ecosystem_contracts",
-            "shared/printdeck/rust-contracts",
-            "shared/threemf",
         ),
     ),
     "deckhand": ProductDependencies(
@@ -227,12 +215,6 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
                 pubspec="apps/setup_ui_flutter/pubspec.yaml",
                 packages=("forge", "printdeck_product_platform"),
             ),
-        ),
-        allowed_submodule_paths=(
-            "marketplace/printdeck",
-            "shared/cepheus-build",
-            "shared/printdeck/ecosystem_contracts",
-            "shared/printdeck/rust-contracts",
         ),
     ),
 }
@@ -344,7 +326,7 @@ def dependency_audit_issues(product: str, repo_root: Path) -> list[DependencyAud
         issues.extend(_audit_flutter_manifest(repo_root / target.pubspec, target.packages))
     for target in deps.go:
         issues.extend(_audit_go_mod(repo_root / target.module_root / "go.mod", target.modules))
-    issues.extend(_audit_gitmodules(repo_root / ".gitmodules", deps.allowed_submodule_paths))
+    issues.extend(_audit_gitmodules(repo_root / ".gitmodules"))
     return issues
 
 
@@ -475,21 +457,20 @@ def _is_local_path(value: str) -> bool:
     return value.startswith(".") or value.startswith("/") or value.startswith("~")
 
 
-def _audit_gitmodules(gitmodules_path: Path, allowed_paths: tuple[str, ...]) -> list[DependencyAuditIssue]:
+def _audit_gitmodules(gitmodules_path: Path) -> list[DependencyAuditIssue]:
     if not gitmodules_path.exists():
         return []
 
-    allowed = set(allowed_paths)
     issues: list[DependencyAuditIssue] = []
     for submodule in _parse_gitmodules(gitmodules_path):
         path = submodule.get("path", "")
         url = submodule.get("url", "")
-        if path and _is_cepheus_submodule_url(url) and path not in allowed:
+        if path and _is_cepheus_submodule_url(url):
             issues.append(
                 DependencyAuditIssue(
                     path=gitmodules_path,
-                    code="unexpected_first_party_submodule",
-                    message=f"{path} is a Cepheus first-party submodule but is not in the product allowlist",
+                    code="first_party_submodule",
+                    message=f"{path} is a Cepheus first-party submodule; use a pinned package/module ref and generated local sibling overrides",
                 )
             )
     return issues

@@ -115,16 +115,20 @@ packages:
   forge:
     dependency: "direct main"
     description:
-      path: "../shared/forge"
-      relative: true
-    source: path
+      path: "."
+      ref: "84cf9f3d1604d61fea7ab342c1b362e1f3d40c40"
+      resolved-ref: "84cf9f3d1604d61fea7ab342c1b362e1f3d40c40"
+      url: "https://github.com/CepheusLabs/forge.git"
+    source: git
     version: "2.1.0"
   forge_wizard:
     dependency: transitive
     description:
-      path: "../shared/forge/packages/forge_wizard"
-      relative: true
-    source: path
+      path: "packages/forge_wizard"
+      ref: "84cf9f3d1604d61fea7ab342c1b362e1f3d40c40"
+      resolved-ref: "84cf9f3d1604d61fea7ab342c1b362e1f3d40c40"
+      url: "https://github.com/CepheusLabs/forge.git"
+    source: git
     version: "0.1.0"
   intl:
     dependency: transitive

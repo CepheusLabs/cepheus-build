@@ -57,20 +57,13 @@ Use `cepheus-build deps -p <product> --write` to create ignored local
 sibling checkouts. See `docs/dependencies.md`.
 
 Real local builds also update the product checkout first with a normal
-fast-forward-only `git pull`; products that still carry submodules also get the
-legacy recursive submodule refresh. Dry Run does not mutate the checkout.
+fast-forward-only `git pull`. Dry Run does not mutate the checkout.
 Foundry OS Docker targets need a running Docker-compatible engine. Docker
 Desktop is not required if `docker info` works through Docker Engine, Colima,
 OrbStack, Rancher Desktop, or another compatible daemon.
 
-From inside an app repo that vendors this as `shared/cepheus-build`:
-
-```bash
-shared/cepheus-build/bin/cepheus-build build \
-  --product printdeck \
-  --repo-root "$PWD" \
-  desktop
-```
+From inside an app repo, invoke the sibling toolkit checkout and pass the app
+repo root explicitly.
 
 ## Build Modes
 
@@ -185,8 +178,7 @@ When `doctor` finds missing tools it prints a suggestion to run `install-deps`.
 ## Build Sync Controls
 
 By default, a local `build` fast-forwards the product repo before running
-targets (`git pull --recurse-submodules` + `submodule update --init
---recursive`). Two flags control this:
+targets (`git pull --ff-only`). Two flags control this:
 
 ```bash
 # Skip the pre-build sync (use the checkout as-is)
@@ -217,5 +209,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 ## Repo Adoption
 
-See [docs/adoption.md](docs/adoption.md) for submodule setup and workflow
-templates.
+See [docs/adoption.md](docs/adoption.md) for sibling-checkout setup and
+workflow templates.

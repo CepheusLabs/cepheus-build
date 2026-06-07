@@ -21,6 +21,13 @@ def test_printdeck_outputs_flutter_and_go_files(tmp_path: Path) -> None:
     assert paths == {"frontend/pubspec_overrides.yaml", "backend/go.work"}
 
 
+def test_cepheus_build_output_uses_sibling_forge_path(tmp_path: Path) -> None:
+    output = dependency_outputs("cepheus-build", tmp_path / "cepheus-build", tmp_path)[0]
+
+    assert output.path.relative_to(tmp_path / "cepheus-build").as_posix() == "app/pubspec_overrides.yaml"
+    assert "  forge:\n    path: ../../forge\n" in output.content
+
+
 def test_printdeck_flutter_override_uses_sibling_checkout_paths(tmp_path: Path) -> None:
     output = next(
         output
@@ -153,7 +160,7 @@ def test_dependency_audit_rejects_committed_go_local_replace(tmp_path: Path) -> 
     assert [issue.code for issue in issues] == ["first_party_go_local_replace"]
 
 
-def test_dependency_audit_rejects_unexpected_first_party_submodule(tmp_path: Path) -> None:
+def test_dependency_audit_rejects_first_party_submodule(tmp_path: Path) -> None:
     repo_root = tmp_path / "printdeck"
     _write_printdeck_committed_manifests(
         repo_root,
@@ -166,7 +173,7 @@ def test_dependency_audit_rejects_unexpected_first_party_submodule(tmp_path: Pat
 
     issues = dependency_audit_issues("printdeck", repo_root)
 
-    assert [issue.code for issue in issues] == ["unexpected_first_party_submodule"]
+    assert [issue.code for issue in issues] == ["first_party_submodule"]
 
 
 def _write_printdeck_committed_manifests(
@@ -196,14 +203,5 @@ def _write_printdeck_committed_manifests(
         "require github.com/cepheuslabs/stockpile v0.2.1\n"
         f"{go_replace}\n"
     )
-    (repo_root / ".gitmodules").write_text(
-        """
-[submodule "third_party/printdeck-ecosystem-contracts"]
-\tpath = third_party/printdeck-ecosystem-contracts
-\turl = https://github.com/CepheusLabs/printdeck-ecosystem-contracts.git
-[submodule "shared/cepheus-build"]
-\tpath = shared/cepheus-build
-\turl = ../cepheus-build.git
-"""
-        + extra_gitmodule
-    )
+    if extra_gitmodule:
+        (repo_root / ".gitmodules").write_text(extra_gitmodule)

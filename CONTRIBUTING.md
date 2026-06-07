@@ -19,16 +19,9 @@ that each product repo sits as a *sibling* of this one:
 There is no submodule or checkout of product repos inside this one; builds
 operate on those external checkouts.
 
-The other supported layout is vendoring this repo as a submodule at
-`shared/cepheus-build` inside an app repo. In that case, always pass
-`--repo-root "$PWD"` so the CLI resolves paths from the app repo's root:
-
-```bash
-shared/cepheus-build/bin/cepheus-build build \
-  -p printdeck --repo-root "$PWD" desktop
-```
-
-In CI workflows and embedded use, always pass `--repo-root`.
+From inside an app repo, invoke this sibling checkout and pass
+`--repo-root "$PWD"` so the CLI resolves paths from the app repo's root. In CI
+workflows and embedded use, always pass `--repo-root`.
 
 ## Working on the CLI
 
@@ -69,11 +62,11 @@ exception while it remains a single-file entrypoint; new modules added under
 
 ## Working on the GUI App
 
-The Flutter app in `app/` depends on the `forge` submodule. Initialize it
-before the first `pub get`:
+The Flutter app in `app/` depends on Forge through a pinned git ref. For local
+Forge edits, generate the ignored sibling override before `pub get`:
 
 ```bash
-git submodule update --init --recursive
+./bin/cepheus-build deps -p cepheus-build --write
 cd app
 flutter pub get
 flutter analyze

@@ -34,7 +34,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   file_picker: ^8.0.0
   forge:
-    path: ../shared/forge
+    git:
+      url: https://github.com/CepheusLabs/forge.git
+      ref: 84cf9f3d1604d61fea7ab342c1b362e1f3d40c40
 
 dev_dependencies:
   flutter_test:

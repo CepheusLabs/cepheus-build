@@ -83,7 +83,7 @@ def add_local_build_args(parser: argparse.ArgumentParser) -> None:
         "--no-sync",
         dest="no_sync",
         action="store_true",
-        help="Skip syncing (git pull + submodule update) the product checkout before building.",
+        help="Skip syncing (git pull) the product checkout before building.",
     )
     parser.add_argument(
         "--require-clean",
@@ -201,7 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     deps.add_argument(
         "--audit-committed",
         action="store_true",
-        help="Only verify committed manifests and exceptional submodules; skip local override freshness.",
+        help="Only verify committed manifests; skip local override freshness.",
     )
     add_json_arg(deps)
     deps.set_defaults(func=cmd_deps)

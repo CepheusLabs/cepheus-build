@@ -25,8 +25,8 @@ from .flutter import (
 from .process import display_command, run_command, style_prefix
 from .tools import ensure_host, require_target_tools
 
-# Pre-build git housekeeping (status/pull/fetch/submodule) must not hang the
-# build; bound every auxiliary git call below.
+# Pre-build git housekeeping (status/pull/fetch) must not hang the build; bound
+# every auxiliary git call below.
 GIT_TIMEOUT = 120
 
 
@@ -169,7 +169,7 @@ def sync_repo_before_build(
         repo_root,
     )
     if upstream:
-        if not try_run_git(["pull", "--ff-only", "--recurse-submodules"], repo_root, dry_run):
+        if not try_run_git(["pull", "--ff-only"], repo_root, dry_run):
             print(
                 f"warning: could not fast-forward {repo_root}; "
                 "continuing with current checkout"
@@ -184,10 +184,10 @@ def sync_repo_before_build(
                 print(f"update: branch '{branch}' has no upstream; fetching origin")
             else:
                 print("update: detached HEAD has no upstream; fetching origin")
-            run_git(["fetch", "--recurse-submodules", "origin"], repo_root, dry_run)
+            run_git(["fetch", "origin"], repo_root, dry_run)
             if branch and remote_branch_exists(repo_root, "origin", branch):
                 ok = try_run_git(
-                    ["pull", "--ff-only", "--recurse-submodules", "origin", branch],
+                    ["pull", "--ff-only", "origin", branch],
                     repo_root,
                     dry_run,
                 )
@@ -198,8 +198,6 @@ def sync_repo_before_build(
                     )
             elif branch:
                 print(f"skip: origin/{branch} does not exist; continuing without pull")
-    run_git(["submodule", "update", "--init", "--recursive"], repo_root, dry_run)
-
 
 def copy_artifact(source: Path, destination_root: Path, target_name: str) -> None:
     target_root = destination_root / target_name

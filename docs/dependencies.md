@@ -1,9 +1,8 @@
 # First-Party Dependency Workflow
 
-Cepheus product repos should not embed recursive first-party submodule copies as
-the normal development model. Product manifests should move toward pinned
-package refs, tags, or registry releases. Local development uses ignored
-override files generated from one shared manifest.
+Cepheus product repos do not embed recursive first-party submodule copies.
+Product manifests use pinned package refs, tags, or registry releases. Local
+development uses ignored override files generated from one shared manifest.
 
 ## Local Sibling Checkout Model
 
@@ -66,7 +65,8 @@ The target committed state is:
   directives for first-party modules.
 - CI config authenticates once for private `github.com/CepheusLabs/*` fetches.
 - Local path overrides live only in generated ignored files.
-- Submodules remain only for exceptional pinned external forks or source drops.
+- First-party submodules are not allowed. Submodules remain only for exceptional
+  pinned external forks or source drops.
 
 ## CI Authentication
 
@@ -112,4 +112,4 @@ This skips local override freshness and verifies the committed dependency
 model: first-party Flutter packages must not use committed `path:` entries,
 first-party `git:` dependencies need explicit `ref:` pins, Go modules must not
 commit local `replace` directives for first-party repos, and Cepheus submodules
-must be listed in the product's exceptional submodule allowlist.
+must not appear in `.gitmodules`.
