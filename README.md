@@ -73,7 +73,7 @@ normal store-submission mode.
 
 Cepheus Build supports the same product configs in three places:
 
-- Local builds: run `shared/cepheus-build/bin/cepheus-build build ...` from a
+- Local builds: run `../cepheus-build/bin/cepheus-build build ...` from a
   developer machine or release workstation. Desktop Flutter builds are
   host-native: Linux desktop targets need Linux, Windows targets need Windows,
   and Apple targets need macOS.

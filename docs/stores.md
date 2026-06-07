@@ -32,7 +32,7 @@ Play Console app.
 Build a signed `.msix`, then deploy with:
 
 ```powershell
-pwsh -NoProfile -File shared/cepheus-build/scripts/submit-msstore.ps1 `
+pwsh -NoProfile -File ../cepheus-build/scripts/submit-msstore.ps1 `
   -PackagePath build/windows/example.msix
 ```
 

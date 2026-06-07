@@ -3,6 +3,8 @@
 set -euo pipefail
 
 VERSION="${1:-0.0.0-dev}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${CBUILD_REPO_ROOT:?Set CBUILD_REPO_ROOT}"
 : "${CBUILD_BUNDLE:?Set CBUILD_BUNDLE}"
 : "${CBUILD_APP:?Set CBUILD_APP}"
@@ -45,7 +47,8 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$OUT_DIR"
 
 GPG_ARGS=()
-SIGNER="${CBUILD_SIGNER:-${CBUILD_TOOL_ROOT:-$CBUILD_REPO_ROOT/shared/cepheus-build}/scripts/sign-linux-gpg.sh}"
+TOOL_OVERRIDE_ROOT="${CBUILD_TOOL_ROOT:-$TOOL_ROOT}"
+SIGNER="${CBUILD_SIGNER:-$TOOL_OVERRIDE_ROOT/scripts/sign-linux-gpg.sh}"
 if [[ -f "$SIGNER" && -n "${GPG_SIGNING_KEY:-}" ]]; then
   # shellcheck source=/dev/null
   source "$SIGNER"

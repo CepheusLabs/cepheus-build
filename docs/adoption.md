@@ -172,7 +172,7 @@ artifacts = ["app/build/linux/x64/release/bundle"]
 Then call:
 
 ```bash
-shared/cepheus-build/bin/cepheus-build build --config .cepheus-build.toml linux
+../cepheus-build/bin/cepheus-build build --config .cepheus-build.toml linux
 ```
 
 Prefer central configs in this repo for shared product behavior. Prefer local

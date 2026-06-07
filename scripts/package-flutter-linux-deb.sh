@@ -3,6 +3,8 @@
 set -euo pipefail
 
 VERSION="${1:-0.0.0-dev}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${CBUILD_REPO_ROOT:?Set CBUILD_REPO_ROOT}"
 : "${CBUILD_BUNDLE:?Set CBUILD_BUNDLE}"
 : "${CBUILD_APP:?Set CBUILD_APP}"
@@ -59,5 +61,6 @@ DEB="$OUT_DIR/${CBUILD_APP}-${VERSION}-linux-amd64.deb"
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "$DEB"
 echo "Wrote $DEB"
 
-SIGNER="${CBUILD_SIGNER:-${CBUILD_TOOL_ROOT:-$CBUILD_REPO_ROOT/shared/cepheus-build}/scripts/sign-linux-gpg.sh}"
-[[ -f "$SIGNER" ]] && bash "$SIGNER" "$DEB" || echo "note: shared GPG signer not found; skipping signature"
+TOOL_OVERRIDE_ROOT="${CBUILD_TOOL_ROOT:-$TOOL_ROOT}"
+SIGNER="${CBUILD_SIGNER:-$TOOL_OVERRIDE_ROOT/scripts/sign-linux-gpg.sh}"
+[[ -f "$SIGNER" ]] && bash "$SIGNER" "$DEB" || echo "note: cepheus-build GPG signer not found; skipping signature"
