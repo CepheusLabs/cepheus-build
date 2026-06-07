@@ -60,6 +60,9 @@ install = ["cargo install cargo-ndk --locked"]
 [tools."clang++"]
 hint = "install LLVM/Clang and make sure clang++ is on PATH"
 
+[tools.cmake]
+hint = "install CMake and make sure cmake is on PATH"
+
 [tools.create-dmg]
 hint = "install with: brew install create-dmg"
 install = { macos = ["brew install create-dmg"] }
@@ -85,6 +88,9 @@ hint = "install Go from go.dev or your package manager"
 
 [tools.iscc]
 hint = "install Inno Setup and make sure iscc is on PATH"
+
+[tools.ninja]
+hint = "install Ninja and make sure ninja is on PATH"
 
 [tools.pwsh]
 hint = "install PowerShell and make sure pwsh is on PATH"

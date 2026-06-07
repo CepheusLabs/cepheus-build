@@ -82,10 +82,10 @@ tools = ["flutter", "xcodebuild", "pod", "productbuild", "make"]
 hosts = ["windows"]
 cwd = "frontend"
 commands = [
-  "make windows-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
+  "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -BuildName \"%CBUILD_VERSION%\" -BuildNumber \"%CBUILD_BUILD_NUMBER%\"",
 ]
 artifacts = ["frontend/build/windows/x64/runner/Release"]
-tools = ["flutter", "make"]
+tools = ["flutter", "pwsh", "cmake", "ninja"]
 
 [targets.windows-msix]
 hosts = ["windows"]
