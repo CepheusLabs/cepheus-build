@@ -58,9 +58,15 @@ if [[ -z "${CEPHEUS_READ_TOKEN:-}" ]]; then
   done
 fi
 
+if [[ -z "${CEPHEUS_READ_TOKEN:-}" ]] &&
+   command -v gh >/dev/null 2>&1 &&
+   gh auth status >/dev/null 2>&1; then
+  export CEPHEUS_READ_TOKEN="$(gh auth token)"
+fi
+
 if [[ -z "${CEPHEUS_READ_TOKEN:-}" ]]; then
   echo "error: CEPHEUS_READ_TOKEN is required for private first-party Git dependencies." >&2
-  echo "Set CEPHEUS_READ_TOKEN, or provide GITHUB_PAT/GH_TOKEN/GITHUB_TOKEN in the environment or repo .env file." >&2
+  echo "Set CEPHEUS_READ_TOKEN, provide GITHUB_PAT/GH_TOKEN/GITHUB_TOKEN, or authenticate gh on this host." >&2
   exit 2
 fi
 
