@@ -19,3 +19,17 @@ def test_printdeck_windows_target_uses_repo_local_powershell_build() -> None:
     ]
     assert "make" not in target["tools"]
     assert {"flutter", "pwsh", "cmake", "ninja"}.issubset(set(target["tools"]))
+
+
+def test_printdeck_server_group_uses_compose_target() -> None:
+    config = _printdeck_config()
+
+    assert config.expand_targets(["server"]) == ["server-compose"]
+
+    target = config.target("server-compose")
+    assert target["hosts"] == ["linux"]
+    assert target["cwd"] == "."
+    assert target["commands"] == [
+        'bash "$CBUILD_TOOL_ROOT/scripts/printdeck-server-compose.sh"'
+    ]
+    assert {"bash", "docker", "docker-daemon"}.issubset(set(target["tools"]))

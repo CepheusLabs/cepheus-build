@@ -18,6 +18,9 @@ windows = ["self-hosted", "windows"]
 [tools.appimagetool]
 hint = "install appimagetool from the AppImageKit releases"
 
+[tools.bash]
+hint = "install Bash and make sure bash is on PATH"
+
 [tools.cargo]
 hint = "install Rust with rustup or your package manager"
 

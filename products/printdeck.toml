@@ -14,6 +14,7 @@ repository = "CepheusLabs/printdeck"
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["macos-dmg", "windows-msix", "linux-deb", "linux-appimage"]
 mobile = ["ios", "android"]
+server = ["server-compose"]
 stores = ["ios", "android", "macos-appstore", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
@@ -122,6 +123,14 @@ commands = [
 ]
 artifacts = ["frontend/build/linux/printdeck-*-linux-x86_64.AppImage"]
 tools = ["flutter", "appimagetool", "make"]
+
+[targets.server-compose]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/printdeck-server-compose.sh\"",
+]
+tools = ["bash", "docker", "docker-daemon"]
 
 [stores.testflight_ios]
 enabled = true
