@@ -1,0 +1,48 @@
+=== colorwake flutter build (key.properties + appId colorwake; Rust .so already built) ===
+Resolving dependencies...
+Downloading packages...
+  cli_util 0.4.2 (0.5.1 available)
+  code_assets 1.0.0 (1.2.1 available)
+  file_picker 8.3.7 (11.0.2 available)
+  file_selector_android 0.5.2+6 (0.5.2+8 available)
+! file_selector_ios 0.5.3+5 from path ..\..\vendor\file_selector_ios (overridden)
+  file_selector_web 0.9.4+2 (0.9.5 available)
+  flutter_plugin_android_lifecycle 2.0.34 (2.0.35 available)
+  flutter_riverpod 2.6.1 (3.3.1 available)
+  flutter_secure_storage 10.3.0 (10.3.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.0 available)
+  flutter_secure_storage_windows 4.1.0 (4.2.2 available)
+  go_router 14.8.1 (17.3.0 available)
+  google_sign_in_android 7.2.10 (7.2.13 available)
+  hooks 1.0.3 (2.0.2 available)
+  image 4.8.0 (4.9.1 available)
+  json_annotation 4.11.0 (4.12.0 available)
+  lucide_icons_flutter 3.1.13 (3.1.14+2 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.17.0 (1.18.3 available)
+  native_toolchain_c 0.17.6 (0.19.1 available)
+  objective_c 9.3.0 (9.4.1 available)
+  package_info_plus 8.3.1 (10.1.0 available)
+  package_info_plus_platform_interface 3.2.1 (4.1.0 available)
+  riverpod 2.6.1 (3.2.1 available)
+  shared_preferences_android 2.4.23 (2.4.25 available)
+  sqlite3 3.3.1 (3.3.2 available)
+  test_api 0.7.10 (0.7.12 available)
+  url_launcher_android 6.3.29 (6.3.32 available)
+  vector_math 2.2.0 (2.4.0 available)
+  win32 5.15.0 (6.3.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+30 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleRelease'...                        
+Font asset "lucide.ttf" was tree-shaken, reducing it from 815328 to 11888 bytes (98.5% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 20976 bytes (98.7% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "CupertinoIcons.ttf" was tree-shaken, reducing it from 257628 to 848 bytes (99.7% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+Running Gradle task 'assembleRelease'...                          164.2s
+√ Built build\app\outputs\flutter-apk\app-release.apk (31.9MB)
+=== COLORWAKE DONE exit=0 ===

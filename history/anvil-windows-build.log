@@ -1,7 +1,7 @@
+=== anvil windows via cepheus-build (CMake->cargo pd_ffi.dll) ===
 
-==> Anvil: windows (26.6.5+510)
-+ pwsh -NoProfile -ExecutionPolicy Bypass -Command "& { cargo build --release --workspace; Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }"
-error: could not find `Cargo.toml` in `D:\git\CepheusLabs\anvil` or any parent directory
+==> Anvil: windows (26.6.6+575)
++ pwsh -NoProfile -ExecutionPolicy Bypass -Command "& { Set-Location $env:CBUILD_APP_DIR; flutter pub get; flutter build windows --release --build-name=$env:CBUILD_VERSION --build-number=$env:CBUILD_BUILD_NUMBER }"
 Resolving dependencies...
 Downloading packages...
   _fe_analyzer_shared 93.0.0 (101.0.0 available)
@@ -20,7 +20,7 @@ Downloading packages...
   flutter_secure_storage_darwin 0.3.1 (0.4.0 available)
   flutter_secure_storage_linux 3.0.0 (3.0.1 available)
   flutter_secure_storage_windows 4.1.0 (4.2.2 available)
-! forge 2.1.0 from git https://github.com/CepheusLabs/forge.git at 84cf9f (overridden)
+! forge 2.1.0 from git https://github.com/CepheusLabs/forge.git at d5eee6 (overridden)
   go_router 14.8.1 (17.3.0 available)
   hooks 1.0.3 (2.0.2 available)
   json_annotation 4.11.0 (4.12.0 available)
@@ -31,10 +31,6 @@ Downloading packages...
   objective_c 9.3.0 (9.4.1 available)
   package_info_plus 8.3.1 (10.1.0 available)
   package_info_plus_platform_interface 3.2.1 (4.1.0 available)
-! printdeck_app_mode 0.2.0 from git https://github.com/CepheusLabs/printdeck_app_mode.git at ba34c5 (overridden)
-! printdeck_identity 0.1.0 from git https://github.com/CepheusLabs/printdeck_identity.git at 9fd5f5 (overridden)
-! printdeck_product_platform 0.1.0 from git https://github.com/CepheusLabs/printdeck_product_platform.git at c43d5c (overridden)
-! printdeck_stockpile 0.2.0 from git https://github.com/CepheusLabs/stockpile.git at 140b8f in clients/flutter (overridden)
   qr 3.0.2 (4.0.0 available)
   riverpod 2.6.1 (3.2.1 available)
   shared_preferences_android 2.4.23 (2.4.25 available)
@@ -71,7 +67,7 @@ Downloading packages...
   flutter_secure_storage_darwin 0.3.1 (0.4.0 available)
   flutter_secure_storage_linux 3.0.0 (3.0.1 available)
   flutter_secure_storage_windows 4.1.0 (4.2.2 available)
-! forge 2.1.0 from git https://github.com/CepheusLabs/forge.git at 84cf9f (overridden)
+! forge 2.1.0 from git https://github.com/CepheusLabs/forge.git at d5eee6 (overridden)
   go_router 14.8.1 (17.3.0 available)
   hooks 1.0.3 (2.0.2 available)
   json_annotation 4.11.0 (4.12.0 available)
@@ -82,10 +78,6 @@ Downloading packages...
   objective_c 9.3.0 (9.4.1 available)
   package_info_plus 8.3.1 (10.1.0 available)
   package_info_plus_platform_interface 3.2.1 (4.1.0 available)
-! printdeck_app_mode 0.2.0 from git https://github.com/CepheusLabs/printdeck_app_mode.git at ba34c5 (overridden)
-! printdeck_identity 0.1.0 from git https://github.com/CepheusLabs/printdeck_identity.git at 9fd5f5 (overridden)
-! printdeck_product_platform 0.1.0 from git https://github.com/CepheusLabs/printdeck_product_platform.git at c43d5c (overridden)
-! printdeck_stockpile 0.2.0 from git https://github.com/CepheusLabs/stockpile.git at 140b8f in clients/flutter (overridden)
   qr 3.0.2 (4.0.0 available)
   riverpod 2.6.1 (3.2.1 available)
   shared_preferences_android 2.4.23 (2.4.25 available)
@@ -105,7 +97,7 @@ Got dependencies!
 41 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 Building Windows application...                                 
-CUSTOMBUILD : error : could not find `Cargo.toml` in `D:\git\CepheusLabs\anvil\shared\printdeck\slicer-core` or any parent directory [D:\git\CepheusLabs\anvil\app\build\windows\x64\anvil_rust_core.vcxproj]
-D:\Program Files\Microsoft\MSBuild\Microsoft\VC\v180\Microsoft.CppCommon.targets(254,5): error MSB8066: Custom build for 'D:\git\CepheusLabs\anvil\app\build\windows\x64\CMakeFiles\3b72ad878e576bf021b5f54aaca41c98\anvil_rust_core.rule;D:\git\CepheusLabs\anvil\app\windows\CMakeLists.txt' exited with code 101. [D:\git\CepheusLabs\anvil\app\build\windows\x64\anvil_rust_core.vcxproj]
-Building Windows application...                                    13.0s
-Build process failed.
+CUSTOMBUILD : warning : the following packages contain code that will be rejected by a future version of Rust: nom v3.2.1, quick-xml v0.22.0 [D:\git\CepheusLabs\anvil\app\build\windows\x64\anvil_rust_core.vcxproj]
+Building Windows application...                                   264.1s
+√ Built build\windows\x64\runner\Release\anvil.exe
+=== ANVIL-WIN DONE exit=0 ===

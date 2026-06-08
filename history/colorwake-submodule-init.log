@@ -1,0 +1,29 @@
+=== colorwake submodule init ===
+Submodule 'shared/cepheus-build' (https://github.com/CepheusLabs/cepheus-build.git) registered for path 'shared/cepheus-build'
+Submodule 'shared/printdeck/color-composition' (https://github.com/CepheusLabs/printdeck-color-composition.git) registered for path 'shared/printdeck/color-composition'
+Submodule 'shared/printdeck/color-model' (https://github.com/CepheusLabs/printdeck-color-model.git) registered for path 'shared/printdeck/color-model'
+Submodule 'third_party/printdeck-ecosystem-contracts' (https://github.com/CepheusLabs/printdeck-ecosystem-contracts.git) registered for path 'shared/printdeck/ecosystem_contracts'
+Submodule 'shared/printdeck/rust-contracts' (https://github.com/CepheusLabs/printdeck-rust-contracts.git) registered for path 'shared/printdeck/rust-contracts'
+Submodule 'shared/threemf' (https://github.com/CepheusLabs/threemf.git) registered for path 'shared/threemf'
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/cepheus-build'...
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/printdeck/color-composition'...
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/printdeck/color-model'...
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/printdeck/ecosystem_contracts'...
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/printdeck/rust-contracts'...
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/threemf'...
+Submodule path 'shared/cepheus-build': checked out 'baff72fe9ebc30ae3e87303591e198bc0ce2051d'
+Submodule 'shared/forge' (https://github.com/CepheusLabs/forge.git) registered for path 'shared/cepheus-build/shared/forge'
+Cloning into 'D:/git/CepheusLabs/colorwake-studio/shared/cepheus-build/shared/forge'...
+Submodule path 'shared/cepheus-build/shared/forge': checked out '57dabbb9f8685df63d22d19dc5351e50395012c3'
+Submodule path 'shared/printdeck/color-composition': checked out 'a63d4f70d30a0e2a3acf3d69c29f9a7627c65577'
+Submodule path 'shared/printdeck/color-model': checked out 'db1b7aca43bed14006441032744da86789bb918c'
+Submodule path 'shared/printdeck/ecosystem_contracts': checked out 'dc4e9237a80a12e69f776d76f173f800b4a0899a'
+Submodule path 'shared/printdeck/rust-contracts': checked out 'dfccd60a222b91d4ca4f7bdac1e0b5aed9f30cd1'
+Submodule path 'shared/threemf': checked out '33fcc0c1c5810d064fba4fb9b539dd4cdcfae70a'
+=== submodule init exit=0 ===
+ baff72fe9ebc30ae3e87303591e198bc0ce2051d shared/cepheus-build (baff72f)
+ a63d4f70d30a0e2a3acf3d69c29f9a7627c65577 shared/printdeck/color-composition (a63d4f7)
+ db1b7aca43bed14006441032744da86789bb918c shared/printdeck/color-model (heads/main)
+ dc4e9237a80a12e69f776d76f173f800b4a0899a shared/printdeck/ecosystem_contracts (dc4e923)
+ dfccd60a222b91d4ca4f7bdac1e0b5aed9f30cd1 shared/printdeck/rust-contracts (remotes/origin/topic/machine-kind-capabilities-7-gdfccd60)
+ 33fcc0c1c5810d064fba4fb9b539dd4cdcfae70a shared/threemf (33fcc0c)

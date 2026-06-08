@@ -1,0 +1,202 @@
+=== vcpkg bootstrap + openssl:x64-windows ===
+cloning vcpkg...
+Cloning into 'C:\Users\eknof\vcpkg'...
+Updating files:  28% (3928/13964)
+Updating files:  29% (4050/13964)
+Updating files:  30% (4190/13964)
+Updating files:  31% (4329/13964)
+Updating files:  32% (4469/13964)
+Updating files:  33% (4609/13964)
+Updating files:  34% (4748/13964)
+Updating files:  35% (4888/13964)
+Updating files:  36% (5028/13964)
+Updating files:  37% (5167/13964)
+Updating files:  38% (5307/13964)
+Updating files:  39% (5446/13964)
+Updating files:  40% (5586/13964)
+Updating files:  41% (5726/13964)
+Updating files:  42% (5865/13964)
+Updating files:  43% (6005/13964)
+Updating files:  44% (6145/13964)
+Updating files:  45% (6284/13964)
+Updating files:  46% (6424/13964)
+Updating files:  47% (6564/13964)
+Updating files:  48% (6703/13964)
+Updating files:  49% (6843/13964)
+Updating files:  50% (6982/13964)
+Updating files:  51% (7122/13964)
+Updating files:  52% (7262/13964)
+Updating files:  53% (7401/13964)
+Updating files:  54% (7541/13964)
+Updating files:  54% (7679/13964)
+Updating files:  55% (7681/13964)
+Updating files:  56% (7820/13964)
+Updating files:  57% (7960/13964)
+Updating files:  58% (8100/13964)
+Updating files:  59% (8239/13964)
+Updating files:  60% (8379/13964)
+Updating files:  61% (8519/13964)
+Updating files:  62% (8658/13964)
+Updating files:  63% (8798/13964)
+Updating files:  64% (8937/13964)
+Updating files:  65% (9077/13964)
+Updating files:  66% (9217/13964)
+Updating files:  67% (9356/13964)
+Updating files:  68% (9496/13964)
+Updating files:  69% (9636/13964)
+Updating files:  70% (9775/13964)
+Updating files:  71% (9915/13964)
+Updating files:  72% (10055/13964)
+Updating files:  73% (10194/13964)
+Updating files:  74% (10334/13964)
+Updating files:  75% (10473/13964)
+Updating files:  76% (10613/13964)
+Updating files:  76% (10633/13964)
+Updating files:  77% (10753/13964)
+Updating files:  78% (10892/13964)
+Updating files:  79% (11032/13964)
+Updating files:  80% (11172/13964)
+Updating files:  81% (11311/13964)
+Updating files:  82% (11451/13964)
+Updating files:  83% (11591/13964)
+Updating files:  84% (11730/13964)
+Updating files:  85% (11870/13964)
+Updating files:  86% (12010/13964)
+Updating files:  87% (12149/13964)
+Updating files:  88% (12289/13964)
+Updating files:  89% (12428/13964)
+Updating files:  90% (12568/13964)
+Updating files:  91% (12708/13964)
+Updating files:  92% (12847/13964)
+Updating files:  93% (12987/13964)
+Updating files:  94% (13127/13964)
+Updating files:  95% (13266/13964)
+Updating files:  96% (13406/13964)
+Updating files:  97% (13546/13964)
+Updating files:  98% (13685/13964)
+Updating files:  99% (13825/13964)
+Updating files: 100% (13964/13964)
+Updating files: 100% (13964/13964), done.
+Downloading https://github.com/microsoft/vcpkg-tool/releases/download/2026-05-27/vcpkg.exe -> C:\Users\eknof\vcpkg\vcpkg.exe... done.
+Validating signature... done.
+
+vcpkg package management program version 2026-05-27-d5b6777d666efc1a7f491babfcdab37794c1ae3e
+
+See LICENSE.txt for license information.
+Computing installation plan...
+A suitable version of cmake was not found (required v4.3.2).
+Downloading https://github.com/Kitware/CMake/releases/download/v4.3.2/cmake-4.3.2-windows-x86_64.zip -> cmake-4.3.2-windows-x86_64.zip
+Successfully downloaded cmake-4.3.2-windows-x86_64.zip
+Extracting cmake...
+A suitable version of 7zip was not found (required v26.1.0).
+Downloading https://github.com/ip7z/7zip/releases/download/26.01/7z2601-x64.exe -> 7z2601-x64.7z.exe
+Successfully downloaded 7z2601-x64.7z.exe
+Extracting 7zip...
+A suitable version of 7zr was not found (required v26.1.0).
+Downloading https://github.com/ip7z/7zip/releases/download/26.01/7zr.exe -> f798fab8-7zr.exe
+Successfully downloaded f798fab8-7zr.exe
+The following packages will be built and installed:
+    openssl:x64-windows@3.6.2
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2024-05-23
+  * vcpkg-cmake-get-vars:x64-windows@2025-05-29
+Additional packages (*) will be modified to complete this operation.
+Detecting compiler hash for triplet x64-windows...
+Compiler found: D:/Program Files/Microsoft/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe
+Restored 0 package(s) from C:\Users\eknof\AppData\Local\vcpkg\archives in 274 us. Use --debug to see more details.
+Installing 1/4 vcpkg-cmake:x64-windows@2024-04-23...
+vcpkg-cmake:x64-windows@2024-04-23 package ABI: 671484bdbf77201c9b1f9995be850b875a40e0793ca545dfdee2f426e568b7f3
+Building vcpkg-cmake:x64-windows@2024-04-23...
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_configure.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_build.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg_cmake_install.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/vcpkg-port-config.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake_x64-windows/share/vcpkg-cmake/copyright
+-- Performing post-build validation
+Starting submission of vcpkg-cmake:x64-windows@2024-04-23 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-cmake:x64-windows: 153 ms
+Installing 2/4 vcpkg-cmake-config:x64-windows@2024-05-23...
+vcpkg-cmake-config:x64-windows@2024-05-23 package ABI: 1b65bf46405756dc0f84d6dbd413e92faf4b4f5e9e4e357ef813006a941c7205
+Building vcpkg-cmake-config:x64-windows@2024-05-23...
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/vcpkg_cmake_config_fixup.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/vcpkg-port-config.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-config_x64-windows/share/vcpkg-cmake-config/copyright
+-- Skipping post-build validation due to VCPKG_POLICY_EMPTY_PACKAGE
+Starting submission of vcpkg-cmake-config:x64-windows@2024-05-23 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-cmake-config:x64-windows: 110 ms
+Completed submission of vcpkg-cmake:x64-windows@2024-04-23 to 1 binary cache(s) in 35.2 ms
+Installing 3/4 vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+vcpkg-cmake-get-vars:x64-windows@2025-05-29 package ABI: b74fd034591234f4fbcff9f9071af3edc266307c891b7b791d9a1136fc725b53
+Building vcpkg-cmake-get-vars:x64-windows@2025-05-29...
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg_cmake_get_vars.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake_get_vars/CMakeLists.txt
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/cmake-get-vars.cmake.in
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/vcpkg-port-config.cmake
+-- Installing: C:/Users/eknof/vcpkg/packages/vcpkg-cmake-get-vars_x64-windows/share/vcpkg-cmake-get-vars/copyright
+-- Performing post-build validation
+Starting submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in the background
+Elapsed time to handle vcpkg-cmake-get-vars:x64-windows: 127 ms
+Completed submission of vcpkg-cmake-config:x64-windows@2024-05-23 to 1 binary cache(s) in 30.5 ms
+Installing 4/4 openssl:x64-windows@3.6.2...
+openssl:x64-windows@3.6.2 package ABI: 9f3d6518448f2dc0d4f5322e1970c77d4747b2ebfe510af0d3b06479b58971a5
+Building openssl:x64-windows@3.6.2...
+Downloading https://github.com/openssl/openssl/archive/openssl-3.6.2.tar.gz -> openssl-openssl-openssl-3.6.2.tar.gz
+Successfully downloaded openssl-openssl-openssl-3.6.2.tar.gz
+-- Extracting source C:/Users/eknof/vcpkg/downloads/openssl-openssl-openssl-3.6.2.tar.gz
+-- Applying patch cmake-config.patch
+-- Applying patch command-line-length.patch
+-- Applying patch script-prefix.patch
+-- Applying patch windows/install-layout.patch
+-- Applying patch windows/install-pdbs.patch
+-- Applying patch windows/install-programs.diff
+-- Applying patch unix/android-cc.patch
+-- Applying patch unix/move-openssldir.patch
+-- Applying patch unix/no-empty-dirs.patch
+-- Applying patch unix/no-static-libs-for-shared.patch
+-- Using source at C:/Users/eknof/vcpkg/buildtrees/openssl/src/nssl-3.6.2-a98581e5a0.clean
+-- Getting CMake variables for x64-windows
+-- Loading CMake variables from C:/Users/eknof/vcpkg/buildtrees/openssl/cmake-get-vars_C_CXX-x64-windows.cmake.log
+Downloading https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/SP_54221_64bit/strawberry-perl-5.42.2.1-64bit-portable.zip -> strawberry-perl-5.42.2.1-64bit-portable.zip
+Successfully downloaded strawberry-perl-5.42.2.1-64bit-portable.zip
+Downloading nasm-3.01-win64.zip, trying https://www.nasm.us/pub/nasm/releasebuilds/3.01/win64/nasm-3.01-win64.zip
+Successfully downloaded nasm-3.01-win64.zip
+-- Getting CMake variables for x64-windows
+Downloading jom_1_1_7.zip, trying https://download.qt.io/official_releases/jom/jom_1_1_7.zip
+Successfully downloaded jom_1_1_7.zip
+-- Prerunning x64-windows-dbg
+-- Building x64-windows-dbg
+-- Prerunning x64-windows-rel
+-- Building x64-windows-rel
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/lib/pkgconfig/libcrypto.pc
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/lib/pkgconfig/libssl.pc
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/lib/pkgconfig/openssl.pc
+Downloading msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst, trying https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+Successfully downloaded msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+Downloading msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst, trying https://mirror.msys2.org/msys/x86_64/msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+Successfully downloaded msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+-- Using msys root at C:/Users/eknof/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/debug/lib/pkgconfig/libcrypto.pc
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/debug/lib/pkgconfig/libssl.pc
+-- Fixing pkgconfig file: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/debug/lib/pkgconfig/openssl.pc
+-- Installing: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/share/openssl/usage
+-- Installing: C:/Users/eknof/vcpkg/packages/openssl_x64-windows/share/openssl/copyright
+-- Performing post-build validation
+Starting submission of openssl:x64-windows@3.6.2 to 1 binary cache(s) in the background
+Elapsed time to handle openssl:x64-windows: 2.8 min
+Total install time: 2.8 min
+Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+Packages installed in this vcpkg installation declare the following licenses:
+Apache-2.0
+MIT
+openssl is compatible with built-in CMake targets:
+
+  find_package(OpenSSL REQUIRED)
+  target_link_libraries(main PRIVATE OpenSSL::SSL)
+  target_link_libraries(main PRIVATE OpenSSL::Crypto)
+
+Completed submission of vcpkg-cmake-get-vars:x64-windows@2025-05-29 to 1 binary cache(s) in 34.7 ms
+Waiting for 1 remaining binary cache submissions...
+Completed submission of openssl:x64-windows@3.6.2 to 1 binary cache(s) in 1.1 s (1/1)
+All requested installations completed successfully in: 2.8 min
+=== VCPKG-OPENSSL DONE exit=0 ===
