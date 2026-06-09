@@ -15,6 +15,7 @@ from .commands import (
     cmd_deps,
     cmd_describe,
     cmd_doctor,
+    cmd_gopins,
     cmd_install_deps,
     cmd_list,
     cmd_local_sweep,
@@ -205,6 +206,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_json_arg(deps)
     deps.set_defaults(func=cmd_deps)
+
+    gopins = sub.add_parser(
+        "gopins",
+        help="Check/advance committed first-party Go pseudo-version pins against sibling checkout HEADs.",
+    )
+    gopins.add_argument(
+        "--repo",
+        action="append",
+        help="Go module repo to inspect/sync (repeatable). Defaults to the current directory.",
+    )
+    gopins.add_argument(
+        "--workspace-root",
+        help="Directory containing sibling first-party checkouts. Defaults to each repo's parent.",
+    )
+    gopins.add_argument(
+        "--write",
+        action="store_true",
+        help="Advance stale pins (`go get module@HEAD` per stale pin + one `go mod tidy`, GOWORK=off). Without this, only reports.",
+    )
+    add_json_arg(gopins)
+    gopins.set_defaults(func=cmd_gopins)
 
     build = sub.add_parser("build", help="Build product targets.")
     add_product_args(build)

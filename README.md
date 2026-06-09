@@ -56,6 +56,15 @@ Use `cepheus-build deps -p <product> --write` to create ignored local
 `pubspec_overrides.yaml` / `go.work` files that point first-party packages at
 sibling checkouts. See `docs/dependencies.md`.
 
+For Go consumers, the committed `github.com/cepheuslabs/*` pseudo-version pins
+are the CI/standalone truth (the ignored `go.work` only overlays local dev).
+`cepheus-build gopins --repo <go-repo>` reports each pin against the sibling
+checkout's HEAD; `--write` advances every stale pin (`go get module@HEAD` per
+pin + one `go mod tidy`, all with `GOWORK=off` so resolution matches CI) so
+the whole first-party set moves together instead of drifting per consumer.
+Repeat `--repo` to sweep several consumers; `--json` for machine output;
+check mode exits non-zero when stale pins exist, so it can gate CI.
+
 Real local builds also update the product checkout first with a normal
 fast-forward-only `git pull`. Dry Run does not mutate the checkout.
 Foundry OS Docker targets need a running Docker-compatible engine. Docker

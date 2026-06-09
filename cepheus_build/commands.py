@@ -413,6 +413,64 @@ def cmd_deps(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_gopins(args: argparse.Namespace) -> int:
+    from . import gopins
+
+    repos = [Path(r).expanduser().resolve() for r in (args.repo or ["."])]
+    payload: list[dict[str, Any]] = []
+    failures: list[str] = []
+    any_stale = False
+
+    for repo in repos:
+        go_mod = repo / "go.mod"
+        if not go_mod.exists():
+            raise BuildError(f"no go.mod in {repo}")
+        workspace_root = (
+            Path(args.workspace_root).expanduser().resolve() if args.workspace_root else repo.parent
+        )
+        rows = gopins.plan(go_mod.read_text(), workspace_root)
+        if args.write:
+            failures.extend(gopins.apply(rows, repo))
+            rows = gopins.plan(go_mod.read_text(), workspace_root)
+        stale = [row for row in rows if row.status == gopins.STATUS_STALE]
+        any_stale = any_stale or bool(stale)
+        payload.append(
+            {
+                "repo": str(repo),
+                "workspace_root": str(workspace_root),
+                "pins": [
+                    {
+                        "module": row.module,
+                        "version": row.version,
+                        "status": row.status,
+                        "pinned_sha": row.pinned_sha,
+                        "head_sha": row.head_sha,
+                        "indirect": row.indirect,
+                    }
+                    for row in rows
+                ],
+                "stale": len(stale),
+            }
+        )
+
+    ok = not failures and (args.write or not any_stale)
+    if getattr(args, "json", False):
+        print(json.dumps({"ok": ok, "written": bool(args.write), "failures": failures, "repos": payload}))
+        return 0 if ok else 1
+
+    for entry in payload:
+        print(f"{entry['repo']}  (siblings: {entry['workspace_root']})")
+        for pin in entry["pins"]:
+            indirect = " (indirect)" if pin["indirect"] else ""
+            print(f"  {pin['status']:>15}: {pin['module']} {pin['version']}{indirect}")
+        print(f"  stale: {entry['stale']}")
+    for failure in failures:
+        print(f"FAILED: {failure}")
+    if any_stale and not args.write:
+        print("run with --write to advance stale pins (go get module@HEAD + go mod tidy, GOWORK=off)")
+    return 0 if ok else 1
+
+
 def command_failure_message(exc: Exception) -> str:
     if isinstance(exc, subprocess.CalledProcessError):
         return f"command failed with exit code {exc.returncode}"

@@ -87,7 +87,9 @@ FLUTTER_PACKAGES: dict[str, FirstPartyPackage] = {
 
 GO_MODULES: dict[str, FirstPartyPackage] = {
     "github.com/cepheuslabs/apiutil": FirstPartyPackage("apiutil"),
+    "github.com/cepheuslabs/atlas": FirstPartyPackage("atlas"),
     "github.com/cepheuslabs/auth": FirstPartyPackage("auth"),
+    "github.com/cepheuslabs/conduit": FirstPartyPackage("conduit"),
     "github.com/cepheuslabs/cortex": FirstPartyPackage("cortex"),
     "github.com/cepheuslabs/gcode": FirstPartyPackage("gcode"),
     "github.com/cepheuslabs/helm": FirstPartyPackage("helm"),
@@ -97,10 +99,15 @@ GO_MODULES: dict[str, FirstPartyPackage] = {
     "github.com/cepheuslabs/marketplace": FirstPartyPackage("marketplace"),
     "github.com/cepheuslabs/nexus": FirstPartyPackage("nexus"),
     "github.com/cepheuslabs/notifications": FirstPartyPackage("notifications"),
+    "github.com/cepheuslabs/printdeck_product_platform": FirstPartyPackage("printdeck_product_platform"),
     "github.com/cepheuslabs/projects": FirstPartyPackage("projects"),
+    "github.com/cepheuslabs/pulse": FirstPartyPackage("pulse"),
     "github.com/cepheuslabs/resolv": FirstPartyPackage("resolv"),
     "github.com/cepheuslabs/slicer": FirstPartyPackage("slicer"),
-    "github.com/cepheuslabs/stockpile": FirstPartyPackage("stockpile"),
+    "github.com/cepheuslabs/sqlkit": FirstPartyPackage("sqlkit"),
+    # NB: the checkout directory is "Stockpile" (capital S) — keep the casing
+    # exact or sibling resolution breaks on case-sensitive filesystems.
+    "github.com/cepheuslabs/stockpile": FirstPartyPackage("Stockpile"),
     "github.com/cepheuslabs/tags": FirstPartyPackage("tags"),
     "github.com/cepheuslabs/telescope": FirstPartyPackage("telescope"),
     "github.com/cepheuslabs/threemf": FirstPartyPackage("threemf"),
@@ -149,6 +156,19 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
         go=(
             GoWorkspace(
                 module_root="backend",
+                modules=tuple(GO_MODULES),
+            ),
+        ),
+    ),
+    # The split backend (the canonical Go host since the monorepo was archived):
+    # one full-sibling workspace at the repo root, per the locked 2026-06-09
+    # convention — local dev resolves every first-party require from siblings,
+    # committed pseudo-version pins stay the CI truth and advance together via
+    # `cepheus-build gopins`.
+    "printdeck-server": ProductDependencies(
+        go=(
+            GoWorkspace(
+                module_root=".",
                 modules=tuple(GO_MODULES),
             ),
         ),

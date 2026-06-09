@@ -1,0 +1,42 @@
+# Printdeck Server — the split Go backend (canonical since the monorepo was
+# archived). Registered here primarily for the dependency tooling:
+#   cepheus-build deps -p printdeck-server --write   -> generates the ignored
+#     full-sibling go.work at the repo root (locked 2026-06-09 convention)
+#   cepheus-build gopins --repo ../printdeck-server  -> checks/advances the
+#     committed first-party pseudo-version pins
+# The quality targets give doctor/build a useful surface, but CI lives in the
+# product repo itself.
+
+[product]
+slug = "printdeck-server"
+display_name = "Printdeck Server"
+repo_root = "../../printdeck-server"
+app_dir = "."
+
+[version]
+env_prefix = "PRINTDECK_SERVER"
+
+[github]
+repository = "CepheusLabs/printdeck-server"
+
+[groups]
+quality = ["build", "vet", "test"]
+all = ["build", "vet", "test"]
+
+[targets.build]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go build ./..."]
+tools = ["go"]
+
+[targets.vet]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go vet ./..."]
+tools = ["go"]
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go test ./..."]
+tools = ["go"]
