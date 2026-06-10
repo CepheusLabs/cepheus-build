@@ -9,7 +9,9 @@ that each product repo sits as a *sibling* of this one:
 ```
 ~/Developer/git/
   cepheus-build/     ← this repo
-  printdeck/
+  printdeck-app/
+  printdeck-server/
+  printdeck-agent/
   colorwake-studio/
   anvil/
   deckhand/
@@ -30,7 +32,7 @@ sibling-repo checkout:
 
 ```bash
 ./bin/cepheus-build list
-./bin/cepheus-build plan -p printdeck desktop
+./bin/cepheus-build plan -p printdeck-app desktop
 ./bin/cepheus-build doctor -p anvil all
 ./bin/cepheus-build build -p colorwake-studio macos --dry-run
 ```

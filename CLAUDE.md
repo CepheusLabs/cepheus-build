@@ -10,7 +10,7 @@ There are two deliverables in this repo: a Python CLI (`cepheus_build/`) that do
 
 ## Repo Layout Assumption (important)
 
-Product configs in `products/*.toml` set `repo_root = "../../<product>"`, resolved **relative to the `products/` directory**. So the default expectation is that each product repo sits two levels up — i.e. as a *sibling* of this repo (e.g. `~/Developer/git/printdeck` next to `~/Developer/git/cepheus-build`). There is no submodule or checkout of the product repos inside this one; builds operate on those external checkouts.
+Product configs in `products/*.toml` set `repo_root = "../../<product>"`, resolved **relative to the `products/` directory**. So the default expectation is that each product repo sits two levels up — i.e. as a *sibling* of this repo (e.g. `~/Developer/git/printdeck-app` next to `~/Developer/git/cepheus-build`). There is no submodule or checkout of the product repos inside this one; builds operate on those external checkouts.
 
 From inside an app repo, invoke the sibling `cepheus-build` checkout and override the root with `--repo-root "$PWD"`. Always pass `--repo-root` in CI and from inside an app repo. If `repo_root`/`app_dir` don't exist, `doctor` will report them as missing.
 
@@ -47,9 +47,9 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 ./bin/cepheus-build local-sweep <product1> <product2> --targets desktop --dry-run
 ```
 
-Products: `printdeck`, `colorwake-studio`, `anvil`, `deckhand`, `foundry`. `targets` are individual target names (`macos`, `web`, `android`) or group names defined per product (`desktop`, `all`, `os`, `quality`, etc.). Most subcommands default to the `desktop` group when no target is given (`ci-matrix` defaults to `all`).
+Products: `printdeck-app`, `printdeck-server`, `printdeck-agent`, `colorwake-studio`, `anvil`, `deckhand`, `foundry`. Printdeck is split across three repos since the monorepo was archived (2026-06-08): the Flutter client (`printdeck-app`, the old monorepo `frontend/` promoted to the repo root), the Go backend (`printdeck-server`, which also carries the `compose` stack target), and the LAN agent (`printdeck-agent`). `targets` are individual target names (`macos`, `web`, `android`) or group names defined per product (`desktop`, `all`, `os`, `quality`, etc.). Most subcommands default to the `desktop` group when no target is given (`ci-matrix` defaults to `all`).
 
-A pytest suite + ruff/mypy config live in the repo. Install dev extras and run them: `pip install -e .[dev]`, then `pytest`, `ruff check .`, and `mypy cepheus_build` (mypy is advisory). `tests/` covers the pure logic and a CLI smoke layer; the command handlers (`cmd_build`, `run_target`, `collect_artifacts`, `sync_repo_before_build`) are also tested with a temp product config + monkeypatched `run_command`. Also validate behavior with `plan`/`doctor`/`--dry-run` against a product, e.g. `./bin/cepheus-build build -p printdeck all --dry-run`. The `.github/workflows/ci.yml` job runs these but is **manual-only** (`workflow_dispatch`) to conserve runner minutes.
+A pytest suite + ruff/mypy config live in the repo. Install dev extras and run them: `pip install -e .[dev]`, then `pytest`, `ruff check .`, and `mypy cepheus_build` (mypy is advisory). `tests/` covers the pure logic and a CLI smoke layer; the command handlers (`cmd_build`, `run_target`, `collect_artifacts`, `sync_repo_before_build`) are also tested with a temp product config + monkeypatched `run_command`. Also validate behavior with `plan`/`doctor`/`--dry-run` against a product, e.g. `./bin/cepheus-build build -p printdeck-app all --dry-run`. The `.github/workflows/ci.yml` job runs these but is **manual-only** (`workflow_dispatch`) to conserve runner minutes.
 
 Global flags available on all subcommands: `--no-color` disables ANSI color output; the `NO_COLOR` environment variable (any non-empty value) has the same effect. `--version` prints the toolkit version and exits. Subprocess auxiliary commands (tool checks, git sync, `gh workflow run` dispatch) have timeouts to prevent hangs.
 

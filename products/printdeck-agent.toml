@@ -1,0 +1,40 @@
+# Printdeck Agent — the split LAN print agent (Go, single module at the repo
+# root). Registered for the quality surface (doctor/build/vet/test); release
+# packaging and installers ship from the product repo's own CI (agent-ci.yml).
+# The agent has no first-party Go requires today, so there is no deps/gopins
+# surface yet — add a GoWorkspace entry in dependency_model.py when it grows
+# one (e.g. printdeck-contracts generated code).
+
+[product]
+slug = "printdeck-agent"
+display_name = "Printdeck Agent"
+repo_root = "../../printdeck-agent"
+app_dir = "."
+
+[version]
+env_prefix = "PRINTDECK_AGENT"
+
+[github]
+repository = "CepheusLabs/printdeck-agent"
+
+[groups]
+quality = ["build", "vet", "test"]
+all = ["build", "vet", "test"]
+
+[targets.build]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go build ./..."]
+tools = ["go"]
+
+[targets.vet]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go vet ./..."]
+tools = ["go"]
+
+[targets.test]
+hosts = ["linux", "macos", "windows"]
+cwd = "."
+commands = ["go test ./..."]
+tools = ["go"]

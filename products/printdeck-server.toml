@@ -5,7 +5,9 @@
 #   cepheus-build gopins --repo ../printdeck-server  -> checks/advances the
 #     committed first-party pseudo-version pins
 # The quality targets give doctor/build a useful surface, but CI lives in the
-# product repo itself.
+# product repo itself. The compose target (formerly the monorepo's
+# server-compose) brings up the backend stack from this repo's
+# docker-compose.yml.
 
 [product]
 slug = "printdeck-server"
@@ -40,3 +42,14 @@ hosts = ["linux", "macos", "windows"]
 cwd = "."
 commands = ["go test ./..."]
 tools = ["go"]
+
+# Build + start the full backend stack (docker compose build --no-cache && up
+# -d) from the repo's docker-compose.yml. Deliberately excluded from
+# `quality`/`all`: it mutates the host by starting containers.
+[targets.compose]
+hosts = ["linux"]
+cwd = "."
+commands = [
+  "bash \"$CBUILD_TOOL_ROOT/scripts/printdeck-server-compose.sh\"",
+]
+tools = ["bash", "docker", "docker-daemon"]

@@ -11,14 +11,30 @@ from cepheus_build.dependency_model import (
 )
 
 
-def test_printdeck_outputs_flutter_and_go_files(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
+def test_printdeck_app_outputs_root_flutter_overrides_only(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck-app"
     workspace_root = tmp_path
 
-    outputs = dependency_outputs("printdeck", repo_root, workspace_root)
+    outputs = dependency_outputs("printdeck-app", repo_root, workspace_root)
 
     paths = {output.path.relative_to(repo_root).as_posix() for output in outputs}
-    assert paths == {"frontend/pubspec_overrides.yaml", "backend/go.work"}
+    assert paths == {"pubspec_overrides.yaml"}
+
+
+def test_printdeck_server_outputs_root_go_work_only(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck-server"
+    workspace_root = tmp_path
+
+    outputs = dependency_outputs("printdeck-server", repo_root, workspace_root)
+
+    paths = {output.path.relative_to(repo_root).as_posix() for output in outputs}
+    assert paths == {"go.work"}
+
+
+def test_printdeck_agent_has_no_override_outputs(tmp_path: Path) -> None:
+    outputs = dependency_outputs("printdeck-agent", tmp_path / "printdeck-agent", tmp_path)
+
+    assert outputs == []
 
 
 def test_cepheus_build_output_uses_sibling_forge_path(tmp_path: Path) -> None:
@@ -28,31 +44,33 @@ def test_cepheus_build_output_uses_sibling_forge_path(tmp_path: Path) -> None:
     assert "  forge:\n    path: ../../forge\n" in output.content
 
 
-def test_printdeck_flutter_override_uses_sibling_checkout_paths(tmp_path: Path) -> None:
+def test_printdeck_app_flutter_override_uses_sibling_checkout_paths(tmp_path: Path) -> None:
     output = next(
         output
-        for output in dependency_outputs("printdeck", tmp_path / "printdeck", tmp_path)
+        for output in dependency_outputs("printdeck-app", tmp_path / "printdeck-app", tmp_path)
         if output.path.name == "pubspec_overrides.yaml"
     )
 
+    # The pubspec sits at the repo root, so siblings are one level up.
     assert "dependency_overrides:" in output.content
-    assert "  forge:\n    path: ../../forge\n" in output.content
-    assert "  printdeck_helm:\n    path: ../../helm/clients/flutter\n" in output.content
-    assert "  stockpile_client:\n    path: ../../stockpile/sdks/dart\n" in output.content
+    assert "  forge:\n    path: ../forge\n" in output.content
+    assert "  printdeck_helm:\n    path: ../helm/clients/flutter\n" in output.content
+    assert "  stockpile_client:\n    path: ../stockpile/sdks/dart\n" in output.content
 
 
-def test_printdeck_go_work_uses_sibling_module_paths(tmp_path: Path) -> None:
+def test_printdeck_server_go_work_uses_sibling_module_paths(tmp_path: Path) -> None:
     output = next(
         output
-        for output in dependency_outputs("printdeck", tmp_path / "printdeck", tmp_path)
+        for output in dependency_outputs("printdeck-server", tmp_path / "printdeck-server", tmp_path)
         if output.path.name == "go.work"
     )
 
+    # The module root is the repo root, so siblings are one level up.
     assert "go 1.26.4" in output.content
     assert "\t.\n" in output.content
-    assert "\t../../apiutil\n" in output.content
-    assert "\t../../helm\n" in output.content
-    assert "\t../../threemf\n" in output.content
+    assert "\t../apiutil\n" in output.content
+    assert "\t../helm\n" in output.content
+    assert "\t../threemf\n" in output.content
 
 
 def test_missing_local_paths_reports_absent_package_roots(tmp_path: Path) -> None:
@@ -81,31 +99,38 @@ def test_deps_repo_root_prefers_workspace_product_checkout(tmp_path: Path) -> No
     assert _deps_repo_root(config, workspace_root) == product_root.resolve()
 
 
-def test_dependency_audit_accepts_printdeck_committed_model(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
-    _write_printdeck_committed_manifests(repo_root)
+def test_dependency_audit_accepts_printdeck_app_committed_model(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck-app"
+    _write_printdeck_app_manifests(repo_root)
 
-    assert dependency_audit_issues("printdeck", repo_root) == []
+    assert dependency_audit_issues("printdeck-app", repo_root) == []
+
+
+def test_dependency_audit_accepts_printdeck_server_committed_model(tmp_path: Path) -> None:
+    repo_root = tmp_path / "printdeck-server"
+    _write_printdeck_server_manifests(repo_root)
+
+    assert dependency_audit_issues("printdeck-server", repo_root) == []
 
 
 def test_dependency_audit_rejects_committed_flutter_path_dependency(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
-    _write_printdeck_committed_manifests(
+    repo_root = tmp_path / "printdeck-app"
+    _write_printdeck_app_manifests(
         repo_root,
         pubspec_dependency="""
   printdeck_stockpile:
-    path: ../../stockpile/clients/flutter
+    path: ../stockpile/clients/flutter
 """,
     )
 
-    issues = dependency_audit_issues("printdeck", repo_root)
+    issues = dependency_audit_issues("printdeck-app", repo_root)
 
     assert [issue.code for issue in issues] == ["first_party_flutter_path_dependency"]
 
 
 def test_dependency_audit_rejects_unpinned_flutter_git_dependency(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
-    _write_printdeck_committed_manifests(
+    repo_root = tmp_path / "printdeck-app"
+    _write_printdeck_app_manifests(
         repo_root,
         pubspec_dependency="""
   printdeck_stockpile:
@@ -115,7 +140,7 @@ def test_dependency_audit_rejects_unpinned_flutter_git_dependency(tmp_path: Path
 """,
     )
 
-    issues = dependency_audit_issues("printdeck", repo_root)
+    issues = dependency_audit_issues("printdeck-app", repo_root)
 
     assert [issue.code for issue in issues] == ["first_party_flutter_unpinned_git_dependency"]
 
@@ -149,34 +174,34 @@ dependency_overrides:
 
 
 def test_dependency_audit_rejects_committed_go_local_replace(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
-    _write_printdeck_committed_manifests(
+    repo_root = tmp_path / "printdeck-server"
+    _write_printdeck_server_manifests(
         repo_root,
-        go_replace="replace github.com/cepheuslabs/stockpile => ../../stockpile",
+        go_replace="replace github.com/cepheuslabs/stockpile => ../stockpile",
     )
 
-    issues = dependency_audit_issues("printdeck", repo_root)
+    issues = dependency_audit_issues("printdeck-server", repo_root)
 
     assert [issue.code for issue in issues] == ["first_party_go_local_replace"]
 
 
 def test_dependency_audit_rejects_first_party_submodule(tmp_path: Path) -> None:
-    repo_root = tmp_path / "printdeck"
-    _write_printdeck_committed_manifests(
+    repo_root = tmp_path / "printdeck-app"
+    _write_printdeck_app_manifests(
         repo_root,
         extra_gitmodule="""
-[submodule "clients/flutter/stockpile"]
-\tpath = clients/flutter/stockpile
+[submodule "packages/stockpile"]
+\tpath = packages/stockpile
 \turl = https://github.com/CepheusLabs/stockpile.git
 """,
     )
 
-    issues = dependency_audit_issues("printdeck", repo_root)
+    issues = dependency_audit_issues("printdeck-app", repo_root)
 
     assert [issue.code for issue in issues] == ["first_party_submodule"]
 
 
-def _write_printdeck_committed_manifests(
+def _write_printdeck_app_manifests(
     repo_root: Path,
     *,
     pubspec_dependency: str = """
@@ -186,22 +211,26 @@ def _write_printdeck_committed_manifests(
       ref: 0000000000000000000000000000000000000000
       path: clients/flutter
 """,
-    go_replace: str = "",
     extra_gitmodule: str = "",
 ) -> None:
-    frontend = repo_root / "frontend"
-    backend = repo_root / "backend"
-    frontend.mkdir(parents=True)
-    backend.mkdir(parents=True)
-    (frontend / "pubspec.yaml").write_text(
+    repo_root.mkdir(parents=True)
+    (repo_root / "pubspec.yaml").write_text(
         "name: printdeck\n"
         "dependencies:\n"
         f"{pubspec_dependency.lstrip()}"
     )
-    (backend / "go.mod").write_text(
-        "module github.com/CepheusLabs/printdeck\n\n"
+    if extra_gitmodule:
+        (repo_root / ".gitmodules").write_text(extra_gitmodule)
+
+
+def _write_printdeck_server_manifests(
+    repo_root: Path,
+    *,
+    go_replace: str = "",
+) -> None:
+    repo_root.mkdir(parents=True)
+    (repo_root / "go.mod").write_text(
+        "module github.com/CepheusLabs/printdeck-server\n\n"
         "require github.com/cepheuslabs/stockpile v0.2.1\n"
         f"{go_replace}\n"
     )
-    if extra_gitmodule:
-        (repo_root / ".gitmodules").write_text(extra_gitmodule)

@@ -1,20 +1,25 @@
+# Printdeck App — the split Flutter client (canonical since the printdeck
+# monorepo was archived 2026-06-08). The monorepo's frontend/ directory is this
+# repo's root, so every target runs at the repo root. The Go backend lives in
+# printdeck-server (including the compose stack target) and the LAN print agent
+# in printdeck-agent.
+
 [product]
-slug = "printdeck"
+slug = "printdeck-app"
 display_name = "Printdeck"
-repo_root = "../../printdeck"
-app_dir = "frontend"
+repo_root = "../../printdeck-app"
+app_dir = "."
 
 [version]
-env_prefix = "PRINTDECK"
+env_prefix = "PRINTDECK_APP"
 
 [github]
-repository = "CepheusLabs/printdeck"
+repository = "CepheusLabs/printdeck-app"
 
 [groups]
 desktop = ["macos", "windows", "linux"]
 desktop_packages = ["macos-dmg", "windows-msix", "linux-deb", "linux-appimage"]
 mobile = ["ios", "android"]
-server = ["server-compose"]
 stores = ["ios", "android", "macos-appstore", "windows-msix"]
 all = ["web", "android", "ios", "macos", "windows", "linux"]
 
@@ -24,117 +29,109 @@ WS_BASE_URL = { env = "PRINTDECK_WS_BASE_URL", default = "wss://printdeck.app/ap
 
 [targets.web]
 hosts = ["linux", "macos", "windows"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make web VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/web"]
+artifacts = ["build/web"]
 tools = ["flutter", "make"]
 
 [targets.android]
 hosts = ["linux", "macos", "windows"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make android-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
 artifacts = [
-  "frontend/build/app/outputs/flutter-apk/app-release.apk",
-  "frontend/build/app/outputs/bundle/release/app-release.aab",
+  "build/app/outputs/flutter-apk/app-release.apk",
+  "build/app/outputs/bundle/release/app-release.aab",
 ]
 tools = ["flutter", "make", "keytool"]
 
 [targets.ios]
 hosts = ["macos"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make ios-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/ios/ipa/*.ipa"]
+artifacts = ["build/ios/ipa/*.ipa"]
 tools = ["flutter", "xcodebuild", "pod", "make"]
 
 [targets.macos]
 hosts = ["macos"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make macos-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/macos/Build/Products/Release/printdeck.app"]
+artifacts = ["build/macos/Build/Products/Release/printdeck.app"]
 tools = ["flutter", "xcodebuild", "pod", "make"]
 
 [targets.macos-dmg]
 hosts = ["macos"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make macos-dmg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/macos/printdeck-*-macos.dmg"]
+artifacts = ["build/macos/printdeck-*-macos.dmg"]
 tools = ["flutter", "xcodebuild", "pod", "create-dmg", "make"]
 
 [targets.macos-appstore]
 hosts = ["macos"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make macos-mas-pkg VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/macos/printdeck-*-mas.pkg"]
+artifacts = ["build/macos/printdeck-*-mas.pkg"]
 tools = ["flutter", "xcodebuild", "pod", "productbuild", "make"]
 
 [targets.windows]
 hosts = ["windows"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build_windows.ps1 -BuildName \"%CBUILD_VERSION%\" -BuildNumber \"%CBUILD_BUILD_NUMBER%\"",
 ]
-artifacts = ["frontend/build/windows/x64/runner/Release"]
+artifacts = ["build/windows/x64/runner/Release"]
 tools = ["flutter", "pwsh", "cmake", "ninja"]
 
 [targets.windows-msix]
 hosts = ["windows"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make windows-msix VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/windows/printdeck-*.msix"]
+artifacts = ["build/windows/printdeck-*.msix"]
 tools = ["flutter", "dart", "python3", "make"]
 
 [targets.linux]
 hosts = ["linux"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make linux-release VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/linux/x64/release/bundle"]
+artifacts = ["build/linux/x64/release/bundle"]
 tools = ["flutter", "make"]
 
 [targets.linux-deb]
 hosts = ["linux"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make linux-deb VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/linux/printdeck-*-linux-amd64.deb"]
+artifacts = ["build/linux/printdeck-*-linux-amd64.deb"]
 tools = ["flutter", "dpkg-deb", "make"]
 
 [targets.linux-appimage]
 hosts = ["linux"]
-cwd = "frontend"
+cwd = "."
 commands = [
   "make linux-appimage VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
 ]
-artifacts = ["frontend/build/linux/printdeck-*-linux-x86_64.AppImage"]
+artifacts = ["build/linux/printdeck-*-linux-x86_64.AppImage"]
 tools = ["flutter", "appimagetool", "make"]
-
-[targets.server-compose]
-hosts = ["linux"]
-cwd = "."
-commands = [
-  "bash \"$CBUILD_TOOL_ROOT/scripts/printdeck-server-compose.sh\"",
-]
-tools = ["bash", "docker", "docker-daemon"]
 
 [stores.testflight_ios]
 enabled = true
-cwd = "frontend"
+cwd = "."
 required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID"]
 commands = [
   "make deploy-ios VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
@@ -142,7 +139,7 @@ commands = [
 
 [stores.google_play]
 enabled = true
-cwd = "frontend"
+cwd = "."
 required_env = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"]
 commands = [
   "make deploy-android VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
@@ -150,7 +147,7 @@ commands = [
 
 [stores.mac_app_store]
 enabled = true
-cwd = "frontend"
+cwd = "."
 required_env = ["APPSTORE_CONNECT_KEY_ID", "APPSTORE_CONNECT_ISSUER_ID", "MACOS_MAS_INSTALLER_CERT", "MACOS_MAS_APP_CERT"]
 commands = [
   "make deploy-macos-appstore VERSION=\"$CBUILD_VERSION\" BUILD=\"$CBUILD_BUILD_NUMBER\"",
@@ -158,10 +155,10 @@ commands = [
 
 [stores.microsoft_store]
 enabled = true
-cwd = "frontend"
+cwd = "."
 required_env = ["PARTNER_CENTER_TENANT_ID", "PARTNER_CENTER_CLIENT_ID", "PARTNER_CENTER_CLIENT_SECRET", "PARTNER_CENTER_APP_ID"]
 commands = [
-  "pwsh -NoProfile -File \"$CBUILD_TOOL_ROOT/scripts/submit-msstore.ps1\" -PackagePath \"$CBUILD_REPO_ROOT/frontend/build/windows/printdeck-$CBUILD_VERSION.msix\"",
+  "pwsh -NoProfile -File \"$CBUILD_TOOL_ROOT/scripts/submit-msstore.ps1\" -PackagePath \"$CBUILD_REPO_ROOT/build/windows/printdeck-$CBUILD_VERSION.msix\"",
 ]
 
 # ── Desktop auto-update feed (pd-updates control plane + R2 CDN) ─────────────
@@ -174,7 +171,7 @@ commands = [
 # AppImage clients reassemble via zsync and verify the same raw bytes).
 [stores.update_publish]
 enabled = false
-cwd = "frontend"
+cwd = "."
 required_env = ["CL_UPDATE_ED25519_PRIVATE_KEY", "CL_UPDATE_PUBLISH_TOKEN", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]
 commands = [
   "bash \"$CBUILD_TOOL_ROOT/scripts/publish-update-feed.sh\" --product printdeck --channel \"${CBUILD_CHANNEL:-stable}\" --version \"$CBUILD_VERSION\" --build \"$CBUILD_BUILD_NUMBER\" build/macos/printdeck-*-macos.dmg build/linux/printdeck-*-linux-x86_64.AppImage",

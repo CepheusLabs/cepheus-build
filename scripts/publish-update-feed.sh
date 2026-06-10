@@ -14,9 +14,9 @@
 #   • AppImage: upload the .zsync control file and populate zsync_url/appimage_url.
 # Until then this script uploads NO .zsync and leaves those enrichment fields off.
 #
-# Contract source of truth: printdeck-ecosystem-contracts
-#   schemas/printdeck.release-record.v1.json
-#   registry/update-distribution.json
+# Contract source of truth: printdeck-contracts
+#   ecosystem/schemas/printdeck.release-record.v1.json
+#   ecosystem/registry/update-distribution.json
 #
 # Publishing is ENV-GATED: when the publish token / R2 credentials are not set,
 # this script prints a warning and exits 0 (nothing uploaded/registered). This

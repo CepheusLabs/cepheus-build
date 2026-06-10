@@ -85,7 +85,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
   List<String> _products = const [];
   List<_RunnerProfileChoice> _runnerProfiles = const [];
-  _ProductDescriptor _productDescriptor = _ProductDescriptor.empty('printdeck');
+  _ProductDescriptor _productDescriptor = _ProductDescriptor.empty('printdeck-app');
   List<BuildHistoryEntry> _history = const [];
   BuildHistoryEntry? _selectedHistory;
   Process? _process;

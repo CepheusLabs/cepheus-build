@@ -12,8 +12,8 @@ publishes](installers.md).
 >
 > **Authoritative data contracts (frozen, Phase 0):** the field names, schemas,
 > registry, and signing scheme below are governed by **Update Contracts v1** in
-> `printdeck-ecosystem-contracts`. §3 and §4 of this doc are now *narrative*; the
-> normative source is the schemas and registry linked in
+> `printdeck-contracts` (under `ecosystem/`). §3 and §4 of this doc are now
+> *narrative*; the normative source is the schemas and registry linked in
 > [Phase 0 — frozen contracts](#phase-0--frozen-contracts).
 
 ## The gap this closes
@@ -436,10 +436,10 @@ ships; turning it on is then an additive change, not a contract break.
 
 Phase 0 ("keys & contracts") is **done**. The data contracts that bind the
 supply lane, the control plane, and the clients are frozen as **Update Contracts
-v1** and live in the `printdeck-ecosystem-contracts` repo (validated by its
-`validate.ps1`). §3 and §4 above are narrative; these files are normative.
+v1** and live in the `printdeck-contracts` repo under `ecosystem/` (validated by
+its `validate.ps1`). §3 and §4 above are narrative; these files are normative.
 
-**Schemas + XSD** (`printdeck-ecosystem-contracts/schemas/`):
+**Schemas + XSD** (`printdeck-contracts/ecosystem/schemas/`):
 
 - [`printdeck.release-record.v1.json`][rr] — canonical release record; doubles
   as the `POST /api/v1/updates/admin/releases` body and the `releases` row model.
@@ -449,7 +449,7 @@ v1** and live in the `printdeck-ecosystem-contracts` repo (validated by its
 - [`printdeck.appcast.v1.xsd`][xsd] — the Sparkle/WinSparkle appcast render
   contract (per-platform feeds; verbatim sparkle namespace).
 
-**Golden fixtures** (`printdeck-ecosystem-contracts/goldens/distribution/`):
+**Golden fixtures** (`printdeck-contracts/ecosystem/goldens/distribution/`):
 
 - [`release-record-anvil-macos.json`][rr-gold] · `release-record-anvil-windows.json`
 - [`update-check-appimage-available.json`][ucr-appimg] · [`update-check-android-current.json`][ucr-android]
@@ -478,14 +478,14 @@ bridge rotation). The live public key is a placeholder there until keygen is run
   supply bridge (sha256 + sign → R2 → `POST /api/v1/updates/admin/releases`), wired as the
   `[stores.update_publish]` lane (`enabled=false`) in each product TOML.
 
-[rr]: ../../printdeck-ecosystem-contracts/schemas/printdeck.release-record.v1.json
-[ucr]: ../../printdeck-ecosystem-contracts/schemas/printdeck.update-check-response.v1.json
-[xsd]: ../../printdeck-ecosystem-contracts/schemas/printdeck.appcast.v1.xsd
-[reg]: ../../printdeck-ecosystem-contracts/registry/update-distribution.json
-[rr-gold]: ../../printdeck-ecosystem-contracts/goldens/distribution/release-record-anvil-macos.json
-[ucr-appimg]: ../../printdeck-ecosystem-contracts/goldens/distribution/update-check-appimage-available.json
-[ucr-android]: ../../printdeck-ecosystem-contracts/goldens/distribution/update-check-android-current.json
-[appcast-gold]: ../../printdeck-ecosystem-contracts/goldens/distribution/appcast-anvil-stable-macos.xml
-[appcast-win-gold]: ../../printdeck-ecosystem-contracts/goldens/distribution/appcast-anvil-stable-windows.xml
-[ue]: ../../printdeck-ecosystem-contracts/schemas/printdeck.update-event.v1.json
-[ue-gold]: ../../printdeck-ecosystem-contracts/goldens/distribution/update-event-applied.json
+[rr]: ../../printdeck-contracts/ecosystem/schemas/printdeck.release-record.v1.json
+[ucr]: ../../printdeck-contracts/ecosystem/schemas/printdeck.update-check-response.v1.json
+[xsd]: ../../printdeck-contracts/ecosystem/schemas/printdeck.appcast.v1.xsd
+[reg]: ../../printdeck-contracts/ecosystem/registry/update-distribution.json
+[rr-gold]: ../../printdeck-contracts/ecosystem/goldens/distribution/release-record-anvil-macos.json
+[ucr-appimg]: ../../printdeck-contracts/ecosystem/goldens/distribution/update-check-appimage-available.json
+[ucr-android]: ../../printdeck-contracts/ecosystem/goldens/distribution/update-check-android-current.json
+[appcast-gold]: ../../printdeck-contracts/ecosystem/goldens/distribution/appcast-anvil-stable-macos.xml
+[appcast-win-gold]: ../../printdeck-contracts/ecosystem/goldens/distribution/appcast-anvil-stable-windows.xml
+[ue]: ../../printdeck-contracts/ecosystem/schemas/printdeck.update-event.v1.json
+[ue-gold]: ../../printdeck-contracts/ecosystem/goldens/distribution/update-event-applied.json

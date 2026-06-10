@@ -114,7 +114,7 @@ GO_MODULES: dict[str, FirstPartyPackage] = {
 }
 
 
-PRINTDECK_FRONTEND_PACKAGES = (
+PRINTDECK_APP_PACKAGES = (
     "forge",
     "helm_client",
     "luxon",
@@ -146,17 +146,14 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
             ),
         ),
     ),
-    "printdeck": ProductDependencies(
+    # The split Flutter client (canonical since the monorepo was archived):
+    # the monorepo's frontend/ is this repo's root, so the overrides land
+    # beside the root pubspec. The Go side lives in printdeck-server.
+    "printdeck-app": ProductDependencies(
         flutter=(
             FlutterOverrides(
-                pubspec="frontend/pubspec.yaml",
-                packages=PRINTDECK_FRONTEND_PACKAGES,
-            ),
-        ),
-        go=(
-            GoWorkspace(
-                module_root="backend",
-                modules=tuple(GO_MODULES),
+                pubspec="pubspec.yaml",
+                packages=PRINTDECK_APP_PACKAGES,
             ),
         ),
     ),
@@ -173,6 +170,11 @@ PRODUCT_DEPENDENCIES: dict[str, ProductDependencies] = {
             ),
         ),
     ),
+    # The split LAN agent has no first-party requires yet; the empty entry
+    # keeps `deps -p printdeck-agent` working as a committed-manifest audit
+    # (.gitmodules) with nothing to render. Add a GoWorkspace here when the
+    # agent gains first-party modules.
+    "printdeck-agent": ProductDependencies(),
     "anvil": ProductDependencies(
         flutter=(
             FlutterOverrides(

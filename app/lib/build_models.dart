@@ -55,7 +55,7 @@ class BuildSettings {
   factory BuildSettings.defaults({required String toolkitRoot}) {
     return BuildSettings(
       toolkitRoot: toolkitRoot,
-      product: 'printdeck',
+      product: 'printdeck-app',
       targets: 'all',
       executionMode: ExecutionMode.local,
       runnerProfile: 'github-hosted',
@@ -78,7 +78,7 @@ class BuildSettings {
   }) {
     return BuildSettings(
       toolkitRoot: _string(json['toolkitRoot'], fallbackToolkitRoot),
-      product: _string(json['product'], 'printdeck'),
+      product: _string(json['product'], 'printdeck-app'),
       targets: _string(json['targets'], 'all'),
       executionMode: ExecutionMode.fromValue(
         _string(json['executionMode'], ExecutionMode.local.value),

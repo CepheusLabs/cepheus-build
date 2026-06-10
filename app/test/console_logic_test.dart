@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// A settings object with sensible test defaults; override per-case via copyWith.
 BuildSettings _settings({
-  String product = 'printdeck',
+  String product = 'printdeck-app',
   String targets = 'all',
   ExecutionMode executionMode = ExecutionMode.local,
   String runnerProfile = 'github-hosted',
@@ -71,7 +71,7 @@ void main() {
   group('cliArgsFor', () {
     test('plan: product + targets', () {
       final args = cliArgsFor(_settings(targets: 'all'), BuildAction.plan);
-      expect(args, ['plan', '-p', 'printdeck', 'all']);
+      expect(args, ['plan', '-p', 'printdeck-app', 'all']);
     });
 
     test('doctor mirrors plan (shared switch arm)', () {
@@ -83,10 +83,10 @@ void main() {
 
     test('repoRoot override is injected when set', () {
       final args = cliArgsFor(
-        _settings(repoRoot: '/work/printdeck', targets: 'web'),
+        _settings(repoRoot: '/work/printdeck-app', targets: 'web'),
         BuildAction.plan,
       );
-      expect(args, ['plan', '-p', 'printdeck', '--repo-root', '/work/printdeck', 'web']);
+      expect(args, ['plan', '-p', 'printdeck-app', '--repo-root', '/work/printdeck-app', 'web']);
     });
 
     test('installDeps adds --skip-unsupported when set, omits when not', () {
@@ -108,7 +108,7 @@ void main() {
         BuildAction.matrix,
       );
       expect(args, [
-        'ci-matrix', '-p', 'printdeck',
+        'ci-matrix', '-p', 'printdeck-app',
         '--runner-profile', 'self-hosted', '--pretty', 'all',
       ]);
     });
@@ -147,7 +147,7 @@ void main() {
         _settings(store: 'google_play'),
         BuildAction.deploy,
       );
-      expect(args, ['deploy', '-p', 'printdeck', 'google_play']);
+      expect(args, ['deploy', '-p', 'printdeck-app', 'google_play']);
     });
 
     test('deployPreview: store + --dry-run', () {
@@ -155,7 +155,7 @@ void main() {
         _settings(store: 'google_play'),
         BuildAction.deployPreview,
       );
-      expect(args, ['deploy', '-p', 'printdeck', 'google_play', '--dry-run']);
+      expect(args, ['deploy', '-p', 'printdeck-app', 'google_play', '--dry-run']);
     });
   });
 
@@ -178,12 +178,12 @@ void main() {
       final args = buildModeArgs(
         _settings(
           executionMode: ExecutionMode.github,
-          githubRepo: 'CepheusLabs/printdeck',
+          githubRepo: 'CepheusLabs/printdeck-app',
           githubWorkflow: 'shared-build.yml',
         ),
         dryRun: false,
       );
-      expect(args, containsAllInOrder(['--github-repo', 'CepheusLabs/printdeck']));
+      expect(args, containsAllInOrder(['--github-repo', 'CepheusLabs/printdeck-app']));
       expect(args, containsAllInOrder(['--github-workflow', 'shared-build.yml']));
     });
 
@@ -213,7 +213,7 @@ void main() {
 
     test('non-foundry github mode has no buildroot flags', () {
       final args = buildModeArgs(
-        _settings(product: 'printdeck', executionMode: ExecutionMode.github),
+        _settings(product: 'printdeck-app', executionMode: ExecutionMode.github),
         dryRun: false,
       );
       expect(args.where((a) => a.contains('buildroot')), isEmpty);
@@ -233,7 +233,7 @@ void main() {
   // -------------------------------------------------------------------------
   group('redactSecrets', () {
     test('leaves an ordinary command untouched', () {
-      const cmd = 'bin/cepheus-build build -p printdeck --mode release macos';
+      const cmd = 'bin/cepheus-build build -p printdeck-app --mode release macos';
       expect(redactSecrets(cmd), cmd);
     });
 

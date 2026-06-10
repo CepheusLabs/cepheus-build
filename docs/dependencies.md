@@ -10,7 +10,9 @@ Keep first-party repos as siblings:
 
 ```text
 Developer/git/
-  printdeck/
+  printdeck-app/
+  printdeck-server/
+  printdeck-agent/
   anvil/
   colorwake-studio/
   forge/
@@ -22,7 +24,8 @@ Developer/git/
 Then generate local overrides for the product you are working in:
 
 ```bash
-cepheus-build deps -p printdeck --write
+cepheus-build deps -p printdeck-app --write
+cepheus-build deps -p printdeck-server --write
 cepheus-build deps -p anvil --write
 cepheus-build deps -p colorwake-studio --write
 ```
@@ -31,7 +34,7 @@ By default the workspace root is the product repo's parent directory. Override i
 for nonstandard layouts:
 
 ```bash
-cepheus-build deps -p printdeck --workspace-root "$HOME/src/cepheus" --write
+cepheus-build deps -p printdeck-app --workspace-root "$HOME/src/cepheus" --write
 ```
 
 ## Generated Files
@@ -90,13 +93,13 @@ enough when org policy grants it cross-repo read access.
 Preview status without writing:
 
 ```bash
-cepheus-build deps -p printdeck
+cepheus-build deps -p printdeck-app
 ```
 
 Machine-readable status:
 
 ```bash
-cepheus-build deps -p printdeck --json
+cepheus-build deps -p printdeck-app --json
 ```
 
 The command exits nonzero if local package paths are missing, or if generated
@@ -105,7 +108,7 @@ files are stale when run without `--write`.
 Committed-manifest audit only, suitable for CI:
 
 ```bash
-cepheus-build deps -p printdeck --audit-committed
+cepheus-build deps -p printdeck-app --audit-committed
 ```
 
 This skips local override freshness and verifies the committed dependency

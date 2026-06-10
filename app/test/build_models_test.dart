@@ -71,7 +71,7 @@ void main() {
     });
 
     test('has the documented default values', () {
-      expect(defaults.product, 'printdeck');
+      expect(defaults.product, 'printdeck-app');
       expect(defaults.targets, 'all');
       expect(defaults.executionMode, ExecutionMode.local);
       expect(defaults.runnerProfile, 'github-hosted');
@@ -301,15 +301,15 @@ void main() {
       return BuildHistoryEntry(
         id: 'id-1',
         action: BuildAction.build,
-        product: 'printdeck',
+        product: 'printdeck-app',
         targets: 'all',
         executionMode: ExecutionMode.local,
         runnerProfile: 'github-hosted',
         buildMode: 'release',
         repoRoot: '/repo',
-        githubRepo: 'cepheus/printdeck',
+        githubRepo: 'cepheus/printdeck-app',
         store: '',
-        command: 'cepheus-build build -p printdeck all',
+        command: 'cepheus-build build -p printdeck-app all',
         startedAt: DateTime.utc(2026, 5, 30, 12, 0, 0),
         durationMs: durationMs,
         exitCode: exitCode,
@@ -400,7 +400,7 @@ void main() {
       return BuildHistoryEntry(
         id: id,
         action: BuildAction.plan,
-        product: 'printdeck',
+        product: 'printdeck-app',
         targets: 'all',
         executionMode: ExecutionMode.local,
         runnerProfile: 'github-hosted',
@@ -408,7 +408,7 @@ void main() {
         repoRoot: '',
         githubRepo: '',
         store: '',
-        command: 'cepheus-build plan -p printdeck all',
+        command: 'cepheus-build plan -p printdeck-app all',
         startedAt: DateTime.utc(2026, 1, 2, 3, 4, 5),
         durationMs: 4200,
         exitCode: exitCode,
@@ -460,7 +460,7 @@ void main() {
       );
       expect(restored.entries, isEmpty);
       expect(restored.settings.toolkitRoot, '/fallback');
-      expect(restored.settings.product, 'printdeck');
+      expect(restored.settings.product, 'printdeck-app');
       expect(restored.settings.themeMode, 'dark');
     });
 
@@ -474,7 +474,7 @@ void main() {
       );
       expect(restored.entries, isEmpty);
       expect(restored.settings.toolkitRoot, '/fallback');
-      expect(restored.settings.product, 'printdeck');
+      expect(restored.settings.product, 'printdeck-app');
     });
 
     test('fromJson skips non-map elements inside the entries list', () {

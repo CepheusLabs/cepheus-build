@@ -5,8 +5,8 @@
 Keep `cepheus-build` beside product repos and invoke it directly:
 
 ```bash
-../cepheus-build/bin/cepheus-build deps -p printdeck --repo-root "$PWD" --write
-../cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
+../cepheus-build/bin/cepheus-build deps -p printdeck-app --repo-root "$PWD" --write
+../cepheus-build/bin/cepheus-build build -p printdeck-app --repo-root "$PWD" all --skip-unsupported
 ```
 
 `deps --write` creates ignored local override files for first-party packages.
@@ -19,8 +19,8 @@ Local builds use the same product configs as CI. They run on the current
 machine and skip targets for other operating systems when asked:
 
 ```bash
-../cepheus-build/bin/cepheus-build plan -p printdeck --repo-root "$PWD" all
-../cepheus-build/bin/cepheus-build build -p printdeck --repo-root "$PWD" all --skip-unsupported
+../cepheus-build/bin/cepheus-build plan -p printdeck-app --repo-root "$PWD" all
+../cepheus-build/bin/cepheus-build build -p printdeck-app --repo-root "$PWD" all --skip-unsupported
 ```
 
 Build one target when you are on the right host:
@@ -47,7 +47,7 @@ jobs:
   build:
     uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
     with:
-      product: printdeck
+      product: printdeck-app
       toolkit-ref: main
       runner-profile: github-hosted
       planner-runner-json: '"ubuntu-latest"'

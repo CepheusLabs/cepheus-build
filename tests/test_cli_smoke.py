@@ -40,11 +40,12 @@ class TestListCommand:
             assert "slug" in item
             assert "display_name" in item
 
-    def test_list_json_includes_printdeck(self):
+    def test_list_json_includes_split_printdeck_products(self):
         result = run_cli("list", "--json")
         data = json.loads(result.stdout)
         slugs = {item["slug"] for item in data}
-        assert "printdeck" in slugs
+        assert {"printdeck-app", "printdeck-server", "printdeck-agent"}.issubset(slugs)
+        assert "printdeck" not in slugs  # the archived monorepo product is gone
 
 
 class TestDescribeCommand:
@@ -66,22 +67,22 @@ class TestDescribeCommand:
             assert "slug" in prod
 
     def test_describe_with_product_exits_zero(self):
-        result = run_cli("describe", "-p", "printdeck", "--json")
+        result = run_cli("describe", "-p", "printdeck-app", "--json")
         assert result.returncode == 0, result.stderr
 
-    def test_describe_printdeck_has_expected_keys(self):
-        result = run_cli("describe", "-p", "printdeck", "--json")
+    def test_describe_printdeck_app_has_expected_keys(self):
+        result = run_cli("describe", "-p", "printdeck-app", "--json")
         data = json.loads(result.stdout)
         for key in ("slug", "display_name", "targets", "groups", "stores", "runner_profiles"):
             assert key in data, f"Missing key: {key}"
 
-    def test_describe_printdeck_slug(self):
-        result = run_cli("describe", "-p", "printdeck", "--json")
+    def test_describe_printdeck_app_slug(self):
+        result = run_cli("describe", "-p", "printdeck-app", "--json")
         data = json.loads(result.stdout)
-        assert data["slug"] == "printdeck"
+        assert data["slug"] == "printdeck-app"
 
-    def test_describe_printdeck_has_targets(self):
-        result = run_cli("describe", "-p", "printdeck", "--json")
+    def test_describe_printdeck_app_has_targets(self):
+        result = run_cli("describe", "-p", "printdeck-app", "--json")
         data = json.loads(result.stdout)
         assert isinstance(data["targets"], dict)
         assert len(data["targets"]) > 0
@@ -111,19 +112,19 @@ class TestValidateCommand:
         assert all(r["valid"] for r in data["results"])
 
     def test_validate_single_product(self):
-        result = run_cli("validate", "-p", "printdeck")
+        result = run_cli("validate", "-p", "printdeck-app")
         assert result.returncode == 0
 
 
 class TestStampJson:
     def test_stamp_json_has_all_keys(self):
-        result = run_cli("stamp", "-p", "printdeck", "--json")
+        result = run_cli("stamp", "-p", "printdeck-app", "--json")
         data = json.loads(result.stdout)
         for key in ("version", "build_number", "full_version", "tag"):
             assert key in data
 
     def test_stamp_default_is_plain_full_version(self):
-        result = run_cli("stamp", "-p", "printdeck")
+        result = run_cli("stamp", "-p", "printdeck-app")
         # plain mode: a single "version+build" line, not JSON
         assert "+" in result.stdout
         assert not result.stdout.strip().startswith("{")
@@ -131,7 +132,7 @@ class TestStampJson:
 
 class TestArtifactsJson:
     def test_artifacts_json_shape(self):
-        result = run_cli("artifacts", "-p", "printdeck", "web", "--json")
+        result = run_cli("artifacts", "-p", "printdeck-app", "web", "--json")
         data = json.loads(result.stdout)
         assert "targets" in data
         assert "web" in data["targets"]

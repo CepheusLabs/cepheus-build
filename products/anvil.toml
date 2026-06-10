@@ -229,7 +229,7 @@ commands = [
 # build come from $CBUILD_CHANNEL / $CBUILD_VERSION / $CBUILD_BUILD_NUMBER. All
 # of required_env is env-gated inside publish-update-feed.sh (warn + exit 0 when
 # unset). The EdDSA seed is the base64 32-byte key from scripts/cl-update-keygen.sh.
-# Contract: printdeck-ecosystem-contracts schemas/printdeck.release-record.v1.json.
+# Contract: printdeck-contracts ecosystem/schemas/printdeck.release-record.v1.json.
 [stores.update_publish]
 enabled = false
 cwd = "."
