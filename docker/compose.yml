@@ -48,7 +48,7 @@ services:
     ports:
       - "${CBUILD_VM_BIND:-0.0.0.0}:8306:8006"   # web viewer (noVNC) — watch the unattended install
       - "${CBUILD_VM_BIND:-0.0.0.0}:2322:22"     # OpenSSH (enabled by oem/install.bat) → profile endpoint
-      - "${CBUILD_VM_BIND:-0.0.0.0}:3389:3389"   # RDP (optional, for manual access)
+      - "${CBUILD_VM_BIND:-0.0.0.0}:${CBUILD_WINDOWS_RDP_PORT:-3389}:3389"   # RDP (optional; override the host port if 3389 is taken)
     volumes:
       - ./windows/oem:/oem        # dockur runs /oem/install.bat post-install
       - cbuild-windows:/storage
