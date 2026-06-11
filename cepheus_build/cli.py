@@ -20,6 +20,7 @@ from .commands import (
     cmd_list,
     cmd_local_sweep,
     cmd_plan,
+    cmd_release,
     cmd_stamp,
     cmd_validate,
 )
@@ -279,6 +280,24 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument("store", help="Store name from [stores.<name>].")
     deploy.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
     deploy.set_defaults(func=cmd_deploy)
+
+    release = sub.add_parser(
+        "release",
+        help="Create + push the annotated release tag in the product repo (triggers app-release.yml).",
+    )
+    add_product_args(release)
+    release.add_argument(
+        "--channel",
+        choices=["stable", "beta"],
+        default="stable",
+        help="Release channel: stable tags v<YY.M.D>-<count>, beta tags beta-v<YY.M.D>-<count>.",
+    )
+    release.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the precondition checks and print the tag/push commands without executing them.",
+    )
+    release.set_defaults(func=cmd_release)
 
     ci_matrix = sub.add_parser("ci-matrix", help="Generate a GitHub Actions matrix for product targets.")
     add_product_args(ci_matrix)

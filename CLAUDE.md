@@ -47,6 +47,9 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 ./bin/cepheus-build artifacts -p <product> <targets> --copy-to dist/      # Collect outputs
 ./bin/cepheus-build deploy -p <product> <store_lane>        # Store deployment
 ./bin/cepheus-build deploy -p <product> <store_lane> --dry-run  # Validate lane; skip real upload
+./bin/cepheus-build release -p <product>                    # Create + push annotated release tag v<YY.M.D>-<count> (triggers app-release.yml)
+./bin/cepheus-build release -p <product> --channel beta     # Beta channel: beta-v<YY.M.D>-<count>
+./bin/cepheus-build release -p <product> --dry-run          # Check preconditions; print tag/push without executing
 ./bin/cepheus-build ci-matrix -p <product> --runner-profile github-hosted <targets> --pretty
 ./bin/cepheus-build local-sweep <product1> <product2> --targets desktop --dry-run
 ```

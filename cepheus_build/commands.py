@@ -49,6 +49,7 @@ from .github import (
     runner_profile_names,
 )
 from .process import run_command
+from .release import create_release_tag
 from .tools import ensure_host, install_deps_for_targets, tool_status
 from .validation import validate_product_data
 
@@ -605,6 +606,24 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     cwd = resolve_path(store.get("cwd", "."), config.repo_root)
     for command in host_list(store.get("commands")):
         run_command(str(command), cwd, env, args.dry_run)
+    return 0
+
+
+def cmd_release(args: argparse.Namespace) -> int:
+    """Create + push the annotated release tag that triggers app-release.yml.
+
+    The tag string (``v<YY.M.D>-<count>`` / ``beta-v...``) is computed from
+    ``compute_stamp`` at creation time and is authoritative from then on
+    (release-pipeline locked decision L5). Refuses dirty worktrees and
+    already-existing tags (local or origin).
+    """
+    config = load_product(args)
+    stamp = compute_stamp(config)
+    tag = create_release_tag(config, stamp, channel=args.channel, dry_run=args.dry_run)
+    if args.dry_run:
+        print(f"dry-run: would create and push {tag} in {config.repo_root}")
+    else:
+        print(f"release: created and pushed {tag} ({config.github.get('repository') or 'origin'})")
     return 0
 
 
