@@ -1,0 +1,44 @@
+# Cepheus Build — GitHub Actions runner fleet (Linux, ephemeral, org-scoped).
+#
+# Runs on errai next to the prod stack. Two replicas is the standing target:
+#
+#   sudo docker compose up -d --build --scale github-runner=2
+#
+# No `container_name` on purpose — scaling needs compose-generated names, and
+# each replica registers under its own hostname-derived runner name.
+#
+# `.env.runner` holds GH_RUNNER_PAT (org-admin PAT, scope admin:org). On errai
+# it lives root-readable-only outside the checkout and is symlinked in — see
+# README.md. Run compose with sudo so the CLI can read it.
+name: cepheus-build-runners
+
+services:
+  github-runner:
+    build:
+      context: .
+    image: ghcr.io/cepheuslabs/cepheus-build-runner:latest
+    env_file:
+      - .env.runner
+    environment:
+      RUNNER_ORG: "${CBUILD_RUNNER_ORG:-CepheusLabs}"
+      RUNNER_LABELS: "${CBUILD_RUNNER_LABELS:-self-hosted,linux}"
+      RUNNER_NAME_PREFIX: "${CBUILD_RUNNER_NAME_PREFIX:-cbuild-linux}"
+    restart: unless-stopped
+    # Resource limits: errai also runs the prod printdeck stack; never let a
+    # build starve it. Tune via env on the compose invocation.
+    cpus: "${CBUILD_RUNNER_CPUS:-4}"
+    mem_limit: "${CBUILD_RUNNER_MEM:-12g}"
+    volumes:
+      # Jobs build + push container images (docker-publish workflows) through
+      # the HOST daemon — the runner image carries only the docker CLI.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Warm tool caches shared across ephemeral registrations and replicas
+      # (all three cache layouts are concurrency-safe by design).
+      - cbuild-pub-cache:/home/runner/.pub-cache
+      - cbuild-cargo-registry:/home/runner/.cargo/registry
+      - cbuild-go-mod:/home/runner/go/pkg/mod
+
+volumes:
+  cbuild-pub-cache:
+  cbuild-cargo-registry:
+  cbuild-go-mod:

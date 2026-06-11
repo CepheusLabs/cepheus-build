@@ -24,3 +24,6 @@ keys/
 
 # Per-user SSH public key seeded into the Windows VM by oem/install.bat
 docker/windows/oem/authorized_keys
+
+# Runner registration PAT env file (symlinked in on the runner host; never commit)
+docker/runner/.env.runner
