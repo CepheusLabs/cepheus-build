@@ -14,10 +14,23 @@ docker/
   macos/provision.sh     # run manually inside the macOS VM after first-boot setup
 ```
 
+## 0. One-time KVM host prep
+
+`vm up/down/status` drive compose **on the KVM host** (`[container_profiles.
+<name>.compose]` in `build.toml`), against a `cepheus-build` checkout there:
+
+```bash
+ssh errai@192.168.0.98 git clone https://github.com/CepheusLabs/cepheus-build ~/cepheus-build
+```
+
+Before first boot, drop your dispatch host's SSH **public** key at
+`docker/windows/oem/authorized_keys` in that checkout (git-ignored) —
+`install.bat` installs it and disables password auth on the Windows VM.
+
 ## 1. Build the Linux image (any host)
 
 ```bash
-docker compose --profile build-image build linux
+docker compose -f docker/compose.yml --profile build-image build linux
 # or directly:
 docker build -t ghcr.io/cepheuslabs/cepheus-build-linux:latest docker/linux
 ```
@@ -45,16 +58,21 @@ cd docker && docker compose up -d windows macos
 ```
 
 Watch each install via the web viewer: Windows `http://<host>:8306`,
-macOS `http://<host>:8406`. First boot is slow.
+macOS `http://<host>:8406`. First boot is slow. The viewer is
+**unauthenticated** and SSH starts with password auth: keep the pool on a
+trusted LAN, or set `CBUILD_VM_BIND=127.0.0.1` on the KVM host and reach the
+ports through an SSH tunnel.
 
-- **Windows** auto-installs, then runs `windows/oem/install.bat` (OpenSSH + the
-  build toolchain). After it finishes, add your SSH key to
-  `C:\ProgramData\ssh\administrators_authorized_keys` and clone the
-  `cepheus-build` toolkit to `%USERPROFILE%\cepheus-build`.
+- **Windows** auto-installs, then runs `windows/oem/install.bat` (OpenSSH, the
+  build toolchain, **rsync** — required VM-side by the repo push/artifact
+  pull — and your seeded SSH key, if provided). Afterwards clone the
+  `cepheus-build` toolkit to `%USERPROFILE%\cepheus-build` (and add your key
+  manually if it was not seeded).
 - **macOS** needs the setup wizard completed manually, then enable **Remote
   Login**, add your SSH key to `~/.ssh/authorized_keys`, and run
-  `macos/provision.sh` (Homebrew, Flutter, CocoaPods, Go, Rust). Install Xcode
-  separately, and clone `cepheus-build` to `~/cepheus-build`.
+  `macos/provision.sh` (Homebrew, Flutter, CocoaPods, Go, Rust; the stock
+  macOS rsync is sufficient). Install Xcode separately, and clone
+  `cepheus-build` to `~/cepheus-build`.
 
 ## 3. Point the profile at the pool
 

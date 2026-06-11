@@ -99,8 +99,14 @@ Cepheus Build supports the same product configs in three places:
   [docker/](docker/). Profiles live under `[container_profiles.*]` in `build.toml`.
 
 ```bash
+# Start the VM pool (compose on the KVM host) and wait for SSH readiness:
+./bin/cepheus-build vm up --wait
+
 # Preview the docker/rsync/ssh commands for every target without running them:
 ./bin/cepheus-build build -p printdeck-app all --execution-mode container --dry-run
+
+# Build everything; OS host groups dispatch in parallel, output prefixed per host:
+./bin/cepheus-build build -p printdeck-app all --execution-mode container
 ```
 
 You can inspect the generated CI matrix without running a build:

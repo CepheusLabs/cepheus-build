@@ -1,0 +1,26 @@
+# Line-ending policy. Everything text is stored LF in the repo; checkout
+# endings follow the rules below. This matters because bin/cepheus-build and
+# the *.sh scripts are bind-mounted into the Linux build container and rsync'd
+# into the macOS VM AS CHECKED OUT -- a CRLF copy (default core.autocrlf=true
+# checkout on a Windows dispatch host) breaks their shebang/parsing there.
+* text=auto
+
+# POSIX-executed surfaces: LF on every platform.
+bin/* text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+
+# Windows-native scripts: CRLF on every platform (cmd.exe mis-parses labels
+# and multi-line blocks in LF batch files; the oem dir is mounted from the
+# Linux KVM host's checkout, so the attribute must force CRLF there too).
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets.
+*.png binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.otf binary
+*.jar binary

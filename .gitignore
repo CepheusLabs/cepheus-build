@@ -21,3 +21,6 @@ history/*/
 # The private seed must live ONLY in the CI secret CL_UPDATE_ED25519_PRIVATE_KEY;
 # never commit anything under keys/.
 keys/
+
+# Per-user SSH public key seeded into the Windows VM by oem/install.bat
+docker/windows/oem/authorized_keys

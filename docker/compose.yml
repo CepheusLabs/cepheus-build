@@ -10,6 +10,14 @@
 # First boot is slow (the OS installs). Provision each VM once (see
 # windows/oem/install.bat — run automatically — and macos/provision.sh —
 # run manually after enabling Remote Login). See ../docs/cross-os-builds.md.
+#
+# Security posture: the published ports include an UNAUTHENTICATED noVNC
+# viewer (8306/8406) and, until provisioning completes, password-auth SSH
+# with the default credentials below. CBUILD_VM_BIND controls the bind
+# address — keep the default 0.0.0.0 only on a trusted LAN; set
+# CBUILD_VM_BIND=127.0.0.1 and reach the pool through an SSH tunnel
+# otherwise. Drop your SSH public key at windows/oem/authorized_keys before
+# first boot and install.bat switches the Windows VM to key-only auth.
 name: cepheus-build-vms
 
 services:
@@ -38,9 +46,9 @@ services:
     cap_add:
       - NET_ADMIN
     ports:
-      - "8306:8006"   # web viewer (noVNC) — watch the unattended install
-      - "2322:22"     # OpenSSH (enabled by oem/install.bat) → profile endpoint
-      - "3389:3389"   # RDP (optional, for manual access)
+      - "${CBUILD_VM_BIND:-0.0.0.0}:8306:8006"   # web viewer (noVNC) — watch the unattended install
+      - "${CBUILD_VM_BIND:-0.0.0.0}:2322:22"     # OpenSSH (enabled by oem/install.bat) → profile endpoint
+      - "${CBUILD_VM_BIND:-0.0.0.0}:3389:3389"   # RDP (optional, for manual access)
     volumes:
       - ./windows/oem:/oem        # dockur runs /oem/install.bat post-install
       - cbuild-windows:/storage
@@ -61,8 +69,8 @@ services:
     cap_add:
       - NET_ADMIN
     ports:
-      - "8406:8006"   # web viewer (noVNC) — complete first-boot setup here
-      - "2422:22"     # SSH (enable Remote Login, then run provision.sh)
+      - "${CBUILD_VM_BIND:-0.0.0.0}:8406:8006"   # web viewer (noVNC) — complete first-boot setup here
+      - "${CBUILD_VM_BIND:-0.0.0.0}:2422:22"     # SSH (enable Remote Login, then run provision.sh)
     volumes:
       - cbuild-macos:/storage
     stop_grace_period: 2m
