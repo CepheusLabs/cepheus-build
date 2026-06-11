@@ -48,14 +48,29 @@ REM choco.exe is invoked by absolute path: this cmd session's PATH predates the
 REM Chocolatey install, so a bare `choco` would not resolve yet. rsync (cwRsync)
 REM must be on the MACHINE PATH for non-interactive sshd sessions; Chocolatey's
 REM shim dir (C:\ProgramData\chocolatey\bin) satisfies that.
-REM Flutter Windows desktop needs Visual Studio's "Desktop development with C++".
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync flutter visualstudio2022buildtools visualstudio2022-workload-nativedesktop
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync flutter
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
 )
-REM 3010 = success, reboot required (VS Build Tools); dockur reboots the VM
-REM as part of its normal lifecycle.
+
+REM Flutter Windows desktop needs Visual Studio's "Desktop development with
+REM C++". The workload rides the SAME bootstrapper invocation via
+REM --package-parameters: the separate visualstudio2022-workload-* choco
+REM package can exit 0 without actually installing the payload when queued
+REM in the same transaction.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
+    echo [cepheus] ERROR: VS Build Tools install failed with exit code %ERRORLEVEL%
+    exit /b %ERRORLEVEL%
+)
+REM 3010 = success, reboot required; dockur reboots the VM as part of its
+REM normal lifecycle. Verify the MSVC toolset actually materialized -- the VS
+REM installer can report success while skipping the workload.
+if not exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC" (
+    echo [cepheus] WARNING: MSVC toolset missing after install. Run manually:
+    echo   "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --norestart --wait
+)
 
 echo [cepheus] provisioning complete.
 echo [cepheus] NEXT: clone cepheus-build to %USERPROFILE%\cepheus-build
