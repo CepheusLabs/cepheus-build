@@ -618,6 +618,9 @@ class TestCmdContainerBuild:
         build_argv = recorded[2][0]
         assert build_argv[-1].startswith("cd ")
         assert "--execution-mode local" in build_argv[-1]
+        # --repo-root is the REMOTE repo path (inner resolve_path expands ~/);
+        # a relative '.' would resolve against the toolkit's products/ dir.
+        assert "--repo-root '~/cbuild/demo'" in build_argv[-1]
         # Transport ssh runs non-interactive.
         assert "BatchMode=yes" in prepare_argv
 

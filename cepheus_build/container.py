@@ -718,14 +718,16 @@ def run_ssh_target(
     # 2. Run the build inside the VM. The remote command is ONE argv element,
     #    so no local shell ever re-parses it (reliable from native Windows
     #    too). Forwarded env values are embedded in it, so the echoed line
-    #    redacts them.
+    #    redacts them. --repo-root carries the remote repo path itself (a
+    #    leading ~/ is expanded by the inner CLI's resolve_path, not a shell):
+    #    a relative '.' would resolve against the TOOLKIT's products/ dir.
     env_pairs = container_env_pairs(config, stamp)
     secrets = [
         value
         for name, value in env_pairs
         if name not in ("CBUILD_VERSION", "CBUILD_BUILD_NUMBER")
     ]
-    sub_args = build_subcommand_args(config, targets, args, repo_root=".")
+    sub_args = build_subcommand_args(config, targets, args, repo_root=remote_repo)
     remote = remote_command(shell, remote_repo, env_pairs, launcher, sub_args)
     run_argv(
         [*ssh_argv, remote], TOOL_ROOT, env, dry_run, prefix=prefix, redact=secrets
