@@ -29,7 +29,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ── System + Flutter Linux-desktop + packaging toolchains ───────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl wget git unzip zip xz-utils \
-        bash make cmake ninja-build clang pkg-config file \
+        bash make cmake ninja-build clang lld pkg-config file \
         libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
         libwebkit2gtk-4.1-dev libssl-dev libmpv-dev \
         openssh-client rsync sudo \
