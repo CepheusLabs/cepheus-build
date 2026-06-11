@@ -48,7 +48,9 @@ REM choco.exe is invoked by absolute path: this cmd session's PATH predates the
 REM Chocolatey install, so a bare `choco` would not resolve yet. rsync (cwRsync)
 REM must be on the MACHINE PATH for non-interactive sshd sessions; Chocolatey's
 REM shim dir (C:\ProgramData\chocolatey\bin) satisfies that.
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync flutter
+REM pwsh: product windows lanes invoke PowerShell 7 scripts; cmake/ninja ride
+REM the PATH for the toolkit's tool checks (Flutter itself locates VS's own).
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync flutter pwsh cmake ninja --installargs "ADD_CMAKE_TO_PATH=System"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
