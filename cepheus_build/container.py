@@ -51,21 +51,39 @@ from .config import (
 )
 from .errors import BuildError
 from .github import preferred_host_for_target
-from .process import run_argv, style_prefix
+from .process import locked_print, run_argv, style_prefix, terminate_active_processes
+from .tools import tool_status
 
 # Characters that make a path segment a glob pattern rather than a literal.
 _GLOB_CHARS = frozenset("*?[")
 
 # Files that exist only for local sibling-checkout development. Container/VM
 # builds use committed pins instead, so these are never shipped into the build
-# environment. ``.dart_tool`` / ``build`` are large, host-specific caches.
+# environment. ``build``/``.dart_tool``/``target``/``dist`` are large,
+# host-specific output/cache trees the remote build regenerates from source --
+# excluding them also keeps the push from racing a concurrent local docker
+# build's bind-mount writes in parallel dispatch (dir patterns with no leading
+# slash match at any depth, covering app/build, packaging/*/dist, etc.).
 RSYNC_EXCLUDES = [
     ".git/",
     "build/",
     ".dart_tool/",
+    "target/",
+    "dist/",
     "pubspec_overrides.yaml",
     "go.work",
     "go.work.sum",
+]
+
+# Non-interactive SSH for every transport command: no password prompts (key
+# auth is the contract -- a prompt would hang the GUI / parallel dispatch),
+# and trust-on-first-use host keys (a fresh VM is unknown; a CHANGED key
+# still fails loudly -- clear known_hosts after a VM reinstall).
+SSH_BATCH_OPTS = [
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
 ]
 
 # Where this toolkit is mounted inside a Linux build container (read-only).
@@ -223,21 +241,31 @@ def docker_argv(
     endpoint: dict[str, Any],
     stamp: Stamp,
     args: argparse.Namespace,
-    *,
-    docker_host: str | None = None,
 ) -> list[str]:
-    """Full ``docker run`` argv for a Linux build container."""
+    """Full ``docker run`` argv for a Linux build container.
+
+    The docker engine must be LOCAL: the run bind-mounts the dispatch host's
+    repo and toolkit, and a remote engine (``docker --host``) would resolve
+    those paths on ITS filesystem -- silently building the wrong tree (or
+    nothing) with the artifacts stranded on the remote machine. Routing a
+    Linux build to another machine is what ``kind = "ssh"`` is for.
+    """
     image = endpoint.get("image")
     if not image:
         raise BuildError("Linux container endpoint is missing 'image' in build.toml.")
     workdir = str(endpoint.get("workdir") or DEFAULT_WORKDIR)
     launcher = str(endpoint.get("launcher") or f"{TOOLKIT_MOUNT}/bin/cepheus-build")
-    host = docker_host or endpoint.get("host")
-
-    argv: list[str] = ["docker"]
+    host = endpoint.get("host")
     if host:
-        argv += ["--host", str(host)]
-    argv += [
+        raise BuildError(
+            "A docker endpoint cannot target a remote engine: the build "
+            "bind-mounts dispatch-host paths, which do not exist on "
+            f"'{host}'. Use kind = \"ssh\" to build on another machine "
+            "(--container-host only overrides ssh endpoints)."
+        )
+
+    argv: list[str] = [
+        "docker",
         "run",
         "--rm",
         "-v",
@@ -249,8 +277,15 @@ def docker_argv(
         "-e",
         "GOWORK=off",
     ]
-    for name, value in container_env_pairs(config, stamp):
-        argv += ["-e", f"{name}={value}"]
+    # Stamp values are not secret and ride inline; forwarded dart_define env
+    # vars use the name-only ``-e NAME`` form so their VALUES never appear in
+    # the echoed command or logs -- docker reads them from the client process
+    # environment (run_docker_target passes os.environ to run_argv).
+    argv += ["-e", f"CBUILD_VERSION={stamp.version}"]
+    argv += ["-e", f"CBUILD_BUILD_NUMBER={stamp.build_number}"]
+    for name in env_passthrough_names(config):
+        if os.environ.get(name):
+            argv += ["-e", name]
     for extra in endpoint.get("run_args") or []:
         argv.append(str(extra))
     argv.append(str(image))
@@ -264,6 +299,11 @@ def _ssh_base(endpoint: dict[str, Any], *, host_override: str | None) -> tuple[s
     host = host_override or endpoint.get("host")
     if not user or not host:
         raise BuildError("SSH container endpoint needs both 'user' and 'host' in build.toml.")
+    for token in (str(user), str(host)):
+        # A leading '-' would be parsed as an ssh/rsync OPTION, not a
+        # destination (argv injection through config values).
+        if token.startswith("-"):
+            raise BuildError(f"Invalid ssh user/host '{token}' (must not start with '-').")
     port_opts: list[str] = []
     port = endpoint.get("port")
     if port:
@@ -319,9 +359,15 @@ def remote_command(
     as one argument to ``ssh``; local-shell quoting is applied by
     :func:`display_command`.
     """
-    launcher_tokens = shlex.split(launcher)
     if shell == "powershell":
-        parts = [f"cd {_ps_path(remote_repo)}"]
+        # PowerShell joins statements with ';' regardless of failure ('&&' is
+        # a parse error in Windows PowerShell 5.1), so make errors terminating:
+        # with $ErrorActionPreference = 'Stop' a failed cd aborts instead of
+        # running the build in the wrong directory. Backslashes in a configured
+        # launcher are normalized to forward slashes (PowerShell accepts them);
+        # shlex.split would otherwise eat them as escapes.
+        launcher_tokens = shlex.split(launcher.replace("\\", "/"))
+        parts = ["$ErrorActionPreference = 'Stop'", f"cd {_ps_path(remote_repo)}"]
         parts += [f"$env:{name} = {_ps_quote(value)}" for name, value in env_pairs]
         invocation = ["&", *(_ps_path(tok) for tok in launcher_tokens)]
         invocation += [_ps_quote(arg) for arg in build_args]
@@ -332,6 +378,7 @@ def remote_command(
             f"Unknown remote shell '{shell}' (expected one of: "
             f"{', '.join(VALID_REMOTE_SHELLS)})."
         )
+    launcher_tokens = shlex.split(launcher)
 
     assignments = " ".join(f"{name}={shlex.quote(value)}" for name, value in env_pairs)
     launcher_part = " ".join(_posix_path(tok) for tok in launcher_tokens)
@@ -340,24 +387,38 @@ def remote_command(
     return f"cd {_posix_path(remote_repo)} && {prefix}{launcher_part} {args_part}"
 
 
-def remote_mkdir_command(shell: str, remote_repo: str) -> str:
-    """Command that creates ``remote_repo`` (and parents) on the VM, idempotently.
+def remote_prepare_command(shell: str, remote_repo: str, roots: list[str]) -> str:
+    """Command that prepares ``remote_repo`` on the VM before the push.
 
-    rsync does not ``mkdir -p`` its destination, so the very first push to a
-    fresh VM would fail without this. ``--mkpath`` is not used because the
-    macOS VM may carry the ancient stock rsync.
+    Two jobs, both idempotent: create the repo dir (rsync does not ``mkdir -p``
+    its destination, so the very first push to a fresh VM would fail;
+    ``--mkpath`` is avoided because the macOS VM may carry the ancient stock
+    rsync), and delete the declared artifact ``roots`` from any previous build
+    (they are excluded from the push's ``--delete``, so without this a stale
+    version-stamped DMG/EXE from an older run would ride back on the pull and
+    satisfy the host-side artifact globs).
     """
     if shell == "powershell":
-        return (
+        parts = [
             f"New-Item -ItemType Directory -Force -Path {_ps_path(remote_repo)} "
             "| Out-Null"
-        )
+        ]
+        parts += [
+            "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "
+            f"-LiteralPath {_ps_path(f'{remote_repo}/{root}')}"
+            for root in roots
+        ]
+        return "; ".join(parts)
     if shell != "posix":
         raise BuildError(
             f"Unknown remote shell '{shell}' (expected one of: "
             f"{', '.join(VALID_REMOTE_SHELLS)})."
         )
-    return f"mkdir -p {_posix_path(remote_repo)}"
+    command = f"mkdir -p {_posix_path(remote_repo)}"
+    if roots:
+        targets = " ".join(_posix_path(f"{remote_repo}/{root}") for root in roots)
+        command += f" && rm -rf {targets}"
+    return command
 
 
 def _posix_path(value: str) -> str:
@@ -377,12 +438,21 @@ def _ps_path(value: str) -> str:
     """PowerShell path with a leading ``~/`` expanded to ``$env:USERPROFILE``.
 
     A literal ``~`` is only resolved by PowerShell providers (Set-Location), not
-    when passed as an argument to an external exe, so expand it explicitly.
+    when passed as an argument to an external exe, so expand it explicitly. The
+    tail rides inside the double-quoted string, so every character PowerShell
+    expands there (backtick, double quote, ``$``) is escaped -- only the
+    intended ``$env:USERPROFILE`` may interpolate.
     """
     if value == "~":
         return '"$env:USERPROFILE"'
     if value.startswith("~/"):
-        return '"$env:USERPROFILE/' + value[2:].replace('"', '`"') + '"'
+        tail = (
+            value[2:]
+            .replace("`", "``")
+            .replace('"', '`"')
+            .replace("$", "`$")
+        )
+        return f'"$env:USERPROFILE/{tail}"'
     return _ps_quote(value)
 
 
@@ -404,7 +474,9 @@ def _glob_free_root(artifact: str) -> str | None:
     return "/".join(clean)
 
 
-def artifact_pull_roots(config: ProductConfig, targets: list[str]) -> list[str]:
+def artifact_pull_roots(
+    config: ProductConfig, targets: list[str], *, prefix: str = ""
+) -> list[str]:
     """Repo-relative paths to rsync back from an SSH VM after a build.
 
     Derived from each target's declared ``artifacts`` globs (the same source
@@ -418,23 +490,23 @@ def artifact_pull_roots(config: ProductConfig, targets: list[str]) -> list[str]:
         target = config.target(target_name)
         artifacts = [str(item) for item in (target.get("artifacts") or [])]
         if not artifacts:
-            print(
-                f"warning: target '{target_name}' declares no artifacts; "
+            locked_print(
+                f"{prefix}warning: target '{target_name}' declares no artifacts; "
                 "nothing will be pulled back from the VM for it."
             )
             continue
         for artifact in artifacts:
             normalized = artifact.replace("\\", "/")
             if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
-                print(
-                    f"warning: artifact '{artifact}' is absolute; only "
+                locked_print(
+                    f"{prefix}warning: artifact '{artifact}' is absolute; only "
                     "repo-relative artifacts are pulled back from a VM."
                 )
                 continue
             root = _glob_free_root(normalized)
             if root is None:
-                print(
-                    f"warning: artifact '{artifact}' globs its first path "
+                locked_print(
+                    f"{prefix}warning: artifact '{artifact}' globs its first path "
                     "segment; cannot derive a pull root for it."
                 )
                 continue
@@ -461,7 +533,21 @@ def _rsync_remote_path(remote_repo: str) -> str:
     return remote_repo
 
 
-def rsync_push_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
+def _rsync_transport(endpoint: dict[str, Any], port_opts: list[str]) -> str:
+    """The ``-e`` remote-shell string for rsync (ssh + port + batch options).
+
+    ``rsync_ssh`` in the endpoint pins which ssh binary rsync spawns: an
+    MSYS2/Cygwin rsync on a Windows dispatch host cannot drive the native
+    Win32-OpenSSH ssh.exe (incompatible pipe handling), so point it at the
+    matching MSYS ssh, e.g. ``rsync_ssh = "C:/msys64/usr/bin/ssh.exe"``.
+    """
+    ssh_program = str(endpoint.get("rsync_ssh") or "ssh")
+    return " ".join([ssh_program, *port_opts, *SSH_BATCH_OPTS])
+
+
+def rsync_push_argv(
+    remote_spec: str, port_opts: list[str], endpoint: dict[str, Any] | None = None
+) -> list[str]:
     """rsync argv pushing the repo to ``remote_spec`` (``user@host:path``).
 
     The source is the literal ``./``: the caller runs rsync with
@@ -469,8 +555,7 @@ def rsync_push_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
     (``D:/...``) out of the argv, where rsync would parse the colon as a
     host separator.
     """
-    ssh_cmd = " ".join(["ssh", *port_opts])
-    argv = ["rsync", "-az", "--delete", "-e", ssh_cmd]
+    argv = ["rsync", "-az", "--delete", "-e", _rsync_transport(endpoint or {}, port_opts)]
     for pattern in RSYNC_EXCLUDES:
         argv += ["--exclude", pattern]
     # Trailing slash on the source copies the contents into the destination dir.
@@ -481,22 +566,26 @@ def rsync_push_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
 def rsync_pull_argv(
     destination: str,
     remote_path: str,
-    roots: list[str],
+    root: str,
     port_opts: list[str],
+    endpoint: dict[str, Any] | None = None,
 ) -> list[str]:
-    """rsync argv pulling artifact ``roots`` back into ``cwd`` (= repo_root).
+    """rsync argv pulling ONE artifact ``root`` back into ``cwd`` (= repo_root).
 
-    ``--relative`` with the ``/./`` anchor recreates each root's path under
-    the local repo, creating implied directories as needed. All roots ride one
-    connection: rsync lets source args after the first omit the host part
-    (``user@host:p1 :p2 ...``).
+    ``--relative`` with the ``/./`` anchor recreates the root's path under the
+    local repo, creating implied directories as needed. One invocation per
+    root: multi-source forms (``user@host:p1 :p2``) need an rsync >= 3.0
+    client, which a macOS dispatch host's stock rsync 2.6.9 is not.
     """
-    if not roots:
-        raise BuildError("rsync_pull_argv called with no artifact roots.")
-    ssh_cmd = " ".join(["ssh", *port_opts])
-    sources = [f"{destination}:{remote_path}/./{roots[0]}"]
-    sources += [f":{remote_path}/./{root}" for root in roots[1:]]
-    return ["rsync", "-az", "--relative", "-e", ssh_cmd, *sources, "."]
+    return [
+        "rsync",
+        "-az",
+        "--relative",
+        "-e",
+        _rsync_transport(endpoint or {}, port_opts),
+        f"{destination}:{remote_path}/./{root}",
+        ".",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +610,7 @@ def group_targets_by_host(config: ProductConfig, targets: list[str]) -> dict[str
     return {host: grouped[host] for host in HOST_ORDER if host in grouped}
 
 
-def _warn_local_overrides(repo_root: Path) -> None:
+def _warn_local_overrides(repo_root: Path, *, prefix: str = "") -> None:
     overrides = [
         name
         for name in ("pubspec_overrides.yaml", "go.work")
@@ -529,10 +618,10 @@ def _warn_local_overrides(repo_root: Path) -> None:
     ]
     if overrides:
         joined = ", ".join(overrides)
-        print(
-            f"warning: {joined} present in {repo_root}; container/VM builds use "
-            "committed pins (GOWORK=off bypasses go.work; remove pubspec_overrides.yaml "
-            "for a clean Flutter build)."
+        locked_print(
+            f"{prefix}warning: {joined} present in {repo_root}; container/VM builds "
+            "use committed pins (GOWORK=off bypasses go.work; remove "
+            "pubspec_overrides.yaml for a clean Flutter build)."
         )
 
 
@@ -545,15 +634,8 @@ def run_docker_target(
     *,
     prefix: str = "",
 ) -> None:
-    _warn_local_overrides(config.repo_root)
-    argv = docker_argv(
-        config,
-        targets,
-        endpoint,
-        stamp,
-        args,
-        docker_host=getattr(args, "container_host", None),
-    )
+    _warn_local_overrides(config.repo_root, prefix=prefix)
+    argv = docker_argv(config, targets, endpoint, stamp, args)
     run_argv(argv, TOOL_ROOT, dict(os.environ), getattr(args, "dry_run", False), prefix=prefix)
 
 
@@ -576,47 +658,59 @@ def run_ssh_target(
     launcher = _default_launcher(host_os, endpoint)
     shell = _remote_shell(host_os, endpoint)
     env = dict(os.environ)
+    ssh_argv = ["ssh", *port_opts, *SSH_BATCH_OPTS, destination]
+    roots = artifact_pull_roots(config, targets, prefix=prefix)
 
-    # 0. Make sure the remote repo dir exists: rsync does not mkdir -p its
-    #    destination, so the first push to a fresh VM would otherwise fail.
-    mkdir = remote_mkdir_command(shell, remote_repo)
-    run_argv(["ssh", *port_opts, destination, mkdir], TOOL_ROOT, env, dry_run, prefix=prefix)
+    # 0. Prepare the remote repo dir: mkdir -p (rsync does not create its
+    #    destination, so the first push to a fresh VM would fail) and delete
+    #    stale declared-artifact roots from previous builds.
+    prepare = remote_prepare_command(shell, remote_repo, roots)
+    run_argv([*ssh_argv, prepare], TOOL_ROOT, env, dry_run, prefix=prefix)
 
     # 1. Push a clean copy of the repo (committed-pins; overrides excluded).
     #    cwd=repo_root: the rsync source is the literal ``./`` (see
     #    rsync_push_argv on why drive-letter paths must stay out of the argv).
-    push = rsync_push_argv(f"{destination}:{remote_path}", port_opts)
+    push = rsync_push_argv(f"{destination}:{remote_path}", port_opts, endpoint)
     run_argv(push, config.repo_root, env, dry_run, prefix=prefix)
 
     # 2. Run the build inside the VM. The remote command is ONE argv element,
-    #    so no local shell ever re-parses it (reliable from native Windows too).
+    #    so no local shell ever re-parses it (reliable from native Windows
+    #    too). Forwarded env values are embedded in it, so the echoed line
+    #    redacts them.
+    env_pairs = container_env_pairs(config, stamp)
+    secrets = [
+        value
+        for name, value in env_pairs
+        if name not in ("CBUILD_VERSION", "CBUILD_BUILD_NUMBER")
+    ]
     sub_args = build_subcommand_args(config, targets, args, repo_root=".")
-    remote = remote_command(
-        shell, remote_repo, container_env_pairs(config, stamp), launcher, sub_args
+    remote = remote_command(shell, remote_repo, env_pairs, launcher, sub_args)
+    run_argv(
+        [*ssh_argv, remote], TOOL_ROOT, env, dry_run, prefix=prefix, redact=secrets
     )
-    run_argv(["ssh", *port_opts, destination, remote], TOOL_ROOT, env, dry_run, prefix=prefix)
 
     # 3. Pull the declared artifact paths back so `artifacts` finds them on
-    #    the host. A missing root (rsync exit 23) is downgraded to a warning:
-    #    the build itself succeeded, and the host-side `artifacts` step is the
-    #    authoritative check on which outputs exist.
-    roots = artifact_pull_roots(config, targets)
+    #    the host -- one rsync per root (stock macOS rsync cannot parse
+    #    multi-source remote args). A missing root (rsync exit 23) downgrades
+    #    to a warning: the build itself succeeded, and the host-side
+    #    `artifacts` step is the authoritative check on which outputs exist.
     if not roots:
-        print(
+        locked_print(
             f"{prefix}warning: no artifact roots to pull back for "
             f"{', '.join(targets)}."
         )
         return
-    pull = rsync_pull_argv(destination, remote_path, roots, port_opts)
-    try:
-        run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
-    except subprocess.CalledProcessError as exc:
-        if exc.returncode != 23:
-            raise
-        print(
-            f"{prefix}warning: some declared artifact paths were not found on "
-            "the VM (rsync exit 23); `artifacts` will report what is missing."
-        )
+    for root in roots:
+        pull = rsync_pull_argv(destination, remote_path, root, port_opts, endpoint)
+        try:
+            run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode != 23:
+                raise
+            locked_print(
+                f"{prefix}warning: '{root}' was not found on the VM (rsync "
+                "exit 23); `artifacts` will report what is missing."
+            )
 
 
 def _dispatch_host(
@@ -646,15 +740,53 @@ def _dispatch_host(
                 f"container profile '{profile_name}' {host_os} endpoint has "
                 f"unknown kind '{kind}' (expected 'docker' or 'ssh')."
             )
-    except (BuildError, subprocess.CalledProcessError) as exc:
-        message = (
-            f"command failed with exit code {exc.returncode}"
-            if isinstance(exc, subprocess.CalledProcessError)
-            else str(exc)
-        )
-        print(f"{prefix}failed: {host_os} ({label}): {message}")
+    except (BuildError, subprocess.CalledProcessError, OSError) as exc:
+        # OSError: a transport binary or path problem (e.g. rsync's spawned
+        # ssh missing) is a per-host failure, not a CLI crash -- it must
+        # participate in keep-going aggregation like any other failure.
+        if isinstance(exc, subprocess.CalledProcessError):
+            message = f"command failed with exit code {exc.returncode}"
+        elif isinstance(exc, FileNotFoundError):
+            message = f"required tool not found: {exc.filename or exc}"
+        else:
+            message = str(exc)
+        locked_print(f"{prefix}failed: {host_os} ({label}): {message}")
         return (f"{host_os}: {label}", message)
     return None
+
+
+def _require_transport_tools(
+    profile: dict[str, Any], grouped: dict[str, list[str]], args: argparse.Namespace
+) -> None:
+    """Fail fast when the dispatch host lacks the transport tools a run needs.
+
+    docker-kind groups need a running docker engine; ssh-kind groups need ssh
+    and rsync on PATH. Checked up front (instead of failing mid-dispatch) and
+    skipped for --dry-run previews and --no-check-tools.
+    """
+    if getattr(args, "dry_run", False) or not getattr(args, "check_tools", True):
+        return
+    needed: list[str] = []
+    for host_os in grouped:
+        endpoint = profile.get(host_os)
+        kind = str(endpoint.get("kind") or "").lower() if isinstance(endpoint, dict) else ""
+        if kind == "docker" and "docker" not in needed:
+            needed.append("docker")
+        elif kind == "ssh":
+            for tool in ("ssh", "rsync"):
+                if tool not in needed:
+                    needed.append(tool)
+    missing = []
+    for tool in needed:
+        ok, detail = tool_status(tool)
+        if not ok:
+            missing.append(f"{tool} ({detail})")
+    if missing:
+        raise BuildError(
+            "Container dispatch needs tools this host is missing: "
+            + "; ".join(missing)
+            + ". Install them or pass --no-check-tools to skip this check."
+        )
 
 
 def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
@@ -665,6 +797,7 @@ def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
     grouped = group_targets_by_host(config, targets)
     if not grouped:
         raise BuildError("No targets could be routed to a container/VM host.")
+    _require_transport_tools(profile, grouped, args)
 
     print(
         f"{style_prefix('==>')} {config.display_name}: container build "
@@ -686,7 +819,8 @@ def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
     failures: list[tuple[str, str]] = []
     if parallel:
         print(f"dispatching {len(grouped)} OS hosts in parallel: {', '.join(grouped)}")
-        with ThreadPoolExecutor(max_workers=len(grouped)) as pool:
+        pool = ThreadPoolExecutor(max_workers=len(grouped))
+        try:
             futures = [
                 pool.submit(
                     _dispatch_host,
@@ -702,6 +836,17 @@ def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
                 for host_os, host_targets in grouped.items()
             ]
             failures = [failure for future in futures if (failure := future.result())]
+        except KeyboardInterrupt:
+            # The signal lands on the MAIN thread only; the workers are blocked
+            # in process.wait() and would keep the CLI alive until the remote
+            # builds finish. Kill their children so the workers unblock, then
+            # let the interrupt propagate.
+            locked_print("interrupted: terminating container/VM dispatch...")
+            terminate_active_processes()
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
+        finally:
+            pool.shutdown(wait=True)
     else:
         for host_os, host_targets in grouped.items():
             failure = _dispatch_host(

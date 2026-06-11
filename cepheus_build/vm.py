@@ -147,8 +147,8 @@ def wait_for_ssh(
         for host_os in list(pending):
             ready, reason = probe(pending[host_os])
             if ready:
-                elapsed = int(clock() - start)
-                print(f"{host_os}: ssh ready ({endpoint_label(pending[host_os])}, {elapsed}s)")
+                waited = int(clock() - start)
+                print(f"{host_os}: ssh ready ({endpoint_label(pending[host_os])}, {waited}s)")
                 del pending[host_os]
             else:
                 last_reason[host_os] = reason

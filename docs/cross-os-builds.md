@@ -66,9 +66,14 @@ Endpoint keys:
 | `shell` | — | ✓ | `"posix"` (macOS, or a Git-Bash Windows) or `"powershell"` |
 | `launcher` | optional | optional | override how the CLI is invoked |
 | `run_args` | optional | — | extra `docker run` flags |
+| `rsync_ssh` | — | optional | ssh binary for rsync's `-e` transport (see Windows note below) |
 
 `--container-profile <name>` selects a profile; `--container-host <h>` overrides
-the host/endpoint of every entry (handy for a one-off remote engine).
+the host of every **ssh** endpoint. A docker endpoint always runs against the
+**local** engine — it bind-mounts dispatch-host paths, which would resolve on
+the wrong filesystem on a remote engine, so a configured `host` on a docker
+endpoint is rejected (route Linux builds to another machine with `kind = "ssh"`
+instead).
 
 ## Setup
 
@@ -85,8 +90,10 @@ the host/endpoint of every entry (handy for a one-off remote engine).
 3. **Point the profile** at the VMs (`host`/`port`), add your SSH public key to
    each VM, and clone `cepheus-build` to the `toolkit` path inside each VM.
 
-`cepheus-build doctor` reports the new `kvm` / `ssh` / `rsync` tools; `kvm` is
-only meaningful on the KVM host.
+The container backend **fail-fasts** before dispatching: docker-kind groups
+need a running docker engine, ssh-kind groups need `ssh` and `rsync` on the
+dispatch host's PATH (skipped for `--dry-run` / `--no-check-tools`). The
+`kvm` tool check only matters on the KVM host itself.
 
 ## Use
 
@@ -119,7 +126,13 @@ step works unchanged.
 > command reaches `ssh` as a single argument — including from native Windows.
 > The dispatch host only needs `ssh` and `rsync` on `PATH` (`rsync` is not part
 > of Git for Windows: install it via MSYS2 `pacman -S rsync`, `choco install
-> rsync`, or dispatch from WSL). `cepheus-build doctor` checks both.
+> rsync`, or dispatch from WSL).
+>
+> **Windows dispatch + rsync caveat:** an MSYS2/Cygwin rsync cannot drive the
+> native Win32-OpenSSH `ssh.exe` (incompatible pipe handling). Set
+> `rsync_ssh = "C:/msys64/usr/bin/ssh.exe"` (or your cwRsync's bundled ssh) on
+> the ssh endpoints so rsync's `-e` transport uses a matching ssh; the plain
+> `ssh` steps keep using the native client.
 
 ## Dependencies, stamping, and secrets
 
@@ -140,6 +153,14 @@ Product TOML `commands` are trusted input and now also execute **inside the
 VMs** over SSH. Only expose the VMs to hosts you control, use **key-based SSH
 auth**, and keep the pool on a private network. This is the same trust model as
 local builds — see the README's "Security / Trust Boundary" section.
+
+Host keys are **trust-on-first-use**: every transport ssh/rsync runs with
+`StrictHostKeyChecking=accept-new` and `BatchMode=yes` (no interactive
+prompts; key auth only). A fresh VM's key is recorded automatically, but a
+*changed* key — e.g. after a VM reinstall — still fails loudly; remove the old
+entry from `~/.ssh/known_hosts` to re-trust. Forwarded `dart_define` env
+values are treated as secrets: the docker path passes them name-only and the
+ssh path redacts them from echoed commands, so they never land in GUI/CI logs.
 
 ## macOS licensing
 

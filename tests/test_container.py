@@ -1,9 +1,9 @@
 """Tests for cepheus_build.container: profile lookup, routing, argv builders.
 
 The argv/command builders are pure functions, so they are asserted directly
-(OS-independent). ``cmd_container_build`` is exercised with ``run_command``
-monkeypatched to record the dispatched command strings instead of running a
-shell, mirroring tests/test_builder.py.
+(OS-independent). ``cmd_container_build`` is exercised with ``run_argv``
+monkeypatched to record the dispatched argv lists (no shell involved),
+mirroring tests/test_builder.py.
 """
 
 from __future__ import annotations
@@ -72,6 +72,12 @@ def _args(**overrides) -> SimpleNamespace:
     )
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+@pytest.fixture(autouse=True)
+def _transport_tools_ok(monkeypatch):
+    """cmd_container_build fail-fasts on missing docker/ssh/rsync; not under test."""
+    monkeypatch.setattr(container, "tool_status", lambda tool: (True, "ok"))
 
 
 # ---------------------------------------------------------------------------
@@ -256,14 +262,33 @@ class TestDockerArgv:
         with pytest.raises(BuildError):
             container.docker_argv(config, ["linux"], {"kind": "docker"}, STAMP, _args())
 
-    def test_container_host_override(self, tmp_path):
+    def test_remote_engine_fails_closed(self, tmp_path):
+        # A remote docker engine would resolve the bind-mount paths on ITS
+        # filesystem -- the wrong tree. kind = "ssh" is the remote transport.
         config = _three_host_config(tmp_path)
-        argv = container.docker_argv(
-            config, ["linux"], self._endpoint(), STAMP, _args(),
-            docker_host="ssh://build@remote",
+        endpoint = {**self._endpoint(), "host": "ssh://build@remote"}
+        with pytest.raises(BuildError, match="remote engine"):
+            container.docker_argv(config, ["linux"], endpoint, STAMP, _args())
+
+    def test_forwarded_env_is_name_only(self, tmp_path, monkeypatch):
+        # Secret VALUES must not appear in the echoed docker argv; docker
+        # reads name-only -e vars from the client process environment.
+        config = _config(
+            tmp_path,
+            """\
+            [flutter.dart_defines]
+            API_KEY = { env = "DEMO_SECRET", default = "" }
+
+            [targets.linux]
+            hosts = ["linux"]
+            commands = ["make linux"]
+            artifacts = ["build/linux"]
+            """,
         )
-        assert "--host" in argv
-        assert "ssh://build@remote" in argv
+        monkeypatch.setenv("DEMO_SECRET", "hunter2")
+        argv = container.docker_argv(config, ["linux"], self._endpoint(), STAMP, _args())
+        assert "DEMO_SECRET" in argv
+        assert not any("hunter2" in part for part in argv)
 
 
 # ---------------------------------------------------------------------------
@@ -293,10 +318,24 @@ class TestRemoteCommand:
             "python ~/cepheus-build/bin/cepheus-build",
             ["build", "-p", "demo", "windows"],
         )
+        # Errors must terminate: ';' chains regardless of failure, so a failed
+        # cd would otherwise run the build in the wrong directory.
+        assert cmd.startswith("$ErrorActionPreference = 'Stop'; cd ")
         # PowerShell needs '&' to invoke a path/quoted command.
         assert "& 'python'" in cmd
         assert "$env:CBUILD_VERSION = '26.6.11'" in cmd
         assert '$env:USERPROFILE/cepheus-build/bin/cepheus-build' in cmd
+
+    def test_powershell_backslash_launcher_normalized(self):
+        cmd = container.remote_command(
+            "powershell",
+            "~/cbuild/demo",
+            [],
+            r"C:\Python312\python.exe ~/cepheus-build/bin/cepheus-build",
+            ["build"],
+        )
+        # shlex.split would have eaten the backslashes as escapes.
+        assert "'C:/Python312/python.exe'" in cmd
 
     def test_posix_no_env_pairs(self):
         cmd = container.remote_command(
@@ -311,13 +350,14 @@ class TestRemoteCommand:
 
 
 class TestRsyncArgv:
-    def test_push_excludes_overrides(self):
+    def test_push_excludes_overrides_and_output_trees(self):
         argv = container.rsync_push_argv("u@h:cbuild/demo", ["-p", "2222"])
         joined = " ".join(argv)
         assert "--delete" in argv
         assert "pubspec_overrides.yaml" in joined
         assert "go.work" in joined
-        assert "build/" in joined
+        for output_tree in ("build/", "target/", "dist/"):
+            assert ["--exclude", output_tree] == argv[argv.index(output_tree) - 1 : argv.index(output_tree) + 1]
         assert "-e" in argv and "ssh -p 2222" in joined
 
     def test_push_source_is_cwd_relative(self):
@@ -328,23 +368,26 @@ class TestRsyncArgv:
         assert argv[-2] == "./"
         assert argv[-1] == "u@h:cbuild/demo/"
 
+    def test_transport_is_batch_mode(self):
+        argv = container.rsync_push_argv("u@h:cbuild/demo", ["-p", "2222"])
+        transport = argv[argv.index("-e") + 1]
+        assert transport.startswith("ssh -p 2222")
+        assert "BatchMode=yes" in transport
+        assert "StrictHostKeyChecking=accept-new" in transport
+
+    def test_transport_ssh_pin(self):
+        # MSYS2/Cygwin rsync on Windows cannot drive the native Win32-OpenSSH
+        # ssh.exe; rsync_ssh pins a compatible ssh for the -e transport only.
+        endpoint = {"rsync_ssh": "C:/msys64/usr/bin/ssh.exe"}
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build", [], endpoint)
+        transport = argv[argv.index("-e") + 1]
+        assert transport.startswith("C:/msys64/usr/bin/ssh.exe")
+
     def test_pull_is_relative_with_anchor(self):
-        argv = container.rsync_pull_argv("u@h", "cbuild/demo", ["build/macos"], [])
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build/macos", [])
         assert "--relative" in argv
         assert argv[-2] == "u@h:cbuild/demo/./build/macos"
         assert argv[-1] == "."
-
-    def test_pull_multiple_roots_share_one_connection(self):
-        argv = container.rsync_pull_argv(
-            "u@h", "cbuild/demo", ["build/macos", "dist/macos"], []
-        )
-        # rsync source args after the first may omit the host part.
-        assert "u@h:cbuild/demo/./build/macos" in argv
-        assert ":cbuild/demo/./dist/macos" in argv
-
-    def test_pull_no_roots_raises(self):
-        with pytest.raises(BuildError):
-            container.rsync_pull_argv("u@h", "cbuild/demo", [], [])
 
 
 # ---------------------------------------------------------------------------
@@ -435,30 +478,52 @@ class TestPathHelpers:
     def test_ps_absolute_is_single_quoted(self):
         assert container._ps_path("C:/x") == "'C:/x'"
 
+    def test_ps_tail_neutralizes_expansion(self):
+        # $ and backtick inside the double-quoted tail must not expand.
+        assert container._ps_path("~/a$b") == '"$env:USERPROFILE/a`$b"'
+        assert container._ps_path("~/a`b") == '"$env:USERPROFILE/a``b"'
+
     def test_rsync_remote_path_strips_tilde(self):
         assert container._rsync_remote_path("~/cbuild/demo") == "cbuild/demo"
         assert container._rsync_remote_path("~") == "."
         assert container._rsync_remote_path("/srv/cbuild") == "/srv/cbuild"
 
+    def test_ssh_base_rejects_option_like_tokens(self):
+        with pytest.raises(BuildError):
+            container._ssh_base({"user": "-oProxyCommand=evil", "host": "h"}, host_override=None)
+        with pytest.raises(BuildError):
+            container._ssh_base({"user": "u", "host": "-evil"}, host_override=None)
+
 
 # ---------------------------------------------------------------------------
-# remote mkdir + shell validation
+# remote prepare + shell validation
 # ---------------------------------------------------------------------------
 
 
-class TestRemoteMkdir:
-    def test_posix_mkdir_p(self):
-        cmd = container.remote_mkdir_command("posix", "~/cbuild/demo")
+class TestRemotePrepare:
+    def test_posix_mkdir_and_stale_root_clean(self):
+        cmd = container.remote_prepare_command(
+            "posix", "~/cbuild/demo", ["build/macos", "dist/macos"]
+        )
+        assert cmd.startswith('mkdir -p "$HOME"/cbuild/demo')
+        assert 'rm -rf "$HOME"/cbuild/demo/build/macos "$HOME"/cbuild/demo/dist/macos' in cmd
+
+    def test_posix_no_roots_is_mkdir_only(self):
+        cmd = container.remote_prepare_command("posix", "~/cbuild/demo", [])
         assert cmd == 'mkdir -p "$HOME"/cbuild/demo'
 
-    def test_powershell_new_item(self):
-        cmd = container.remote_mkdir_command("powershell", "~/cbuild/demo")
+    def test_powershell_new_item_and_remove(self):
+        cmd = container.remote_prepare_command(
+            "powershell", "~/cbuild/demo", ["packaging/windows/dist"]
+        )
         assert "New-Item -ItemType Directory -Force" in cmd
         assert "$env:USERPROFILE/cbuild/demo" in cmd
+        assert "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue" in cmd
+        assert "$env:USERPROFILE/cbuild/demo/packaging/windows/dist" in cmd
 
     def test_unknown_shell_raises(self):
         with pytest.raises(BuildError):
-            container.remote_mkdir_command("powershel", "~/cbuild/demo")
+            container.remote_prepare_command("powershel", "~/cbuild/demo", [])
 
 
 class TestRemoteShellValidation:
@@ -476,7 +541,7 @@ class TestRemoteShellValidation:
 
 
 # ---------------------------------------------------------------------------
-# cmd_container_build dispatch (run_command recorded)
+# cmd_container_build dispatch (run_argv recorded)
 # ---------------------------------------------------------------------------
 
 
@@ -485,7 +550,7 @@ def recorded(monkeypatch):
     """Record every run_argv dispatch as (argv, cwd)."""
     calls: list[tuple[list[str], object]] = []
 
-    def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+    def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
         calls.append((list(argv), cwd))
 
     monkeypatch.setattr(container, "run_argv", fake_run_argv)
@@ -500,26 +565,30 @@ class TestCmdContainerBuild:
         assert len(recorded) == 1
         assert recorded[0][0][:3] == ["docker", "run", "--rm"]
 
-    def test_ssh_host_does_mkdir_push_build_pull(self, tmp_path, recorded):
+    def test_ssh_host_does_prepare_push_build_pulls(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 0
         programs = [argv[0] for argv, _cwd in recorded]
-        assert programs == ["ssh", "rsync", "ssh", "rsync"]
-        mkdir_argv = recorded[0][0]
-        assert "mkdir -p" in mkdir_argv[-1]
+        # prepare, push, build, then one pull per artifact root (macos has 2).
+        assert programs == ["ssh", "rsync", "ssh", "rsync", "rsync"]
+        prepare_argv = recorded[0][0]
+        assert "mkdir -p" in prepare_argv[-1]
+        assert "rm -rf" in prepare_argv[-1]  # stale declared-artifact roots
         # The remote build command travels as ONE argv element (no local shell
         # re-parses it -- reliable from native Windows too).
         build_argv = recorded[2][0]
         assert build_argv[-1].startswith("cd ")
         assert "--execution-mode local" in build_argv[-1]
+        # Transport ssh runs non-interactive.
+        assert "BatchMode=yes" in prepare_argv
 
     def test_rsync_runs_in_repo_root(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 0
         rsync_cwds = [cwd for argv, cwd in recorded if argv[0] == "rsync"]
-        assert rsync_cwds == [config.repo_root, config.repo_root]
+        assert rsync_cwds == [config.repo_root] * 3
 
     def test_mixed_targets_group_per_host(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
@@ -528,9 +597,10 @@ class TestCmdContainerBuild:
         )
         assert rc == 0
         programs = [argv[0] for argv, _cwd in recorded]
-        # 1 docker (linux) + 4 ssh-steps (macos) + 4 ssh-steps (windows)
+        # 1 docker (linux); per ssh host: prepare + build (ssh), push + one
+        # pull per root (rsync). macos has 2 roots, windows 1.
         assert programs.count("docker") == 1
-        assert programs.count("rsync") == 4
+        assert programs.count("rsync") == 5
         assert programs.count("ssh") == 4
 
     def test_unknown_profile_raises(self, tmp_path, recorded):
@@ -539,26 +609,27 @@ class TestCmdContainerBuild:
             container.cmd_container_build(config, _args(targets=["linux"], container_profile="ghost"))
 
     def test_pull_missing_roots_tolerated(self, tmp_path, monkeypatch, capsys):
-        """rsync exit 23 on the artifact pull is a warning, not a failure."""
+        """rsync exit 23 on an artifact pull is a per-root warning, not a failure."""
         import subprocess as sp
 
         config = _three_host_config(tmp_path)
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             if argv[0] == "rsync" and "--relative" in argv:
                 raise sp.CalledProcessError(23, "rsync")
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 0
-        assert "rsync exit 23" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert out.count("rsync exit 23") == 2  # one warning per missing root
 
     def test_pull_real_rsync_error_still_fails(self, tmp_path, monkeypatch):
         import subprocess as sp
 
         config = _three_host_config(tmp_path)
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             if argv[0] == "rsync" and "--relative" in argv:
                 raise sp.CalledProcessError(12, "rsync")
 
@@ -566,13 +637,54 @@ class TestCmdContainerBuild:
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 1
 
+    def test_ssh_secrets_redacted_via_run_argv(self, tmp_path, monkeypatch):
+        """Forwarded dart_define env values ride to run_argv as redact targets."""
+        config = _config(
+            tmp_path,
+            """\
+            [flutter.dart_defines]
+            API_KEY = { env = "DEMO_SECRET", default = "" }
+
+            [targets.macos]
+            hosts = ["macos"]
+            commands = ["make macos"]
+            artifacts = ["dist/demo.dmg"]
+            """,
+        )
+        monkeypatch.setenv("DEMO_SECRET", "hunter2")
+        redactions: list[list[str]] = []
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
+            redactions.append(list(redact or []))
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(config, _args(targets=["macos"]))
+        assert rc == 0
+        # Exactly the build step (3rd call) carries the secret for redaction.
+        assert redactions[2] == ["hunter2"]
+
+    def test_missing_transport_tool_fails_fast(self, tmp_path, monkeypatch, recorded):
+        config = _three_host_config(tmp_path)
+        monkeypatch.setattr(
+            container, "tool_status", lambda tool: (tool != "rsync", "not found")
+        )
+        with pytest.raises(BuildError, match="rsync"):
+            container.cmd_container_build(config, _args(targets=["macos"]))
+        assert recorded == []  # nothing dispatched
+
+    def test_dry_run_skips_transport_tool_check(self, tmp_path, monkeypatch, recorded):
+        config = _three_host_config(tmp_path)
+        monkeypatch.setattr(container, "tool_status", lambda tool: (False, "not found"))
+        rc = container.cmd_container_build(config, _args(targets=["macos"], dry_run=True))
+        assert rc == 0
+
 
 class TestParallelDispatch:
     def test_parallel_prefixes_per_host(self, tmp_path, monkeypatch):
         config = _three_host_config(tmp_path)
         prefixes: list[str] = []
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             prefixes.append(prefix)
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)
@@ -587,7 +699,7 @@ class TestParallelDispatch:
 
         config = _three_host_config(tmp_path)
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             if argv[0] == "ssh":
                 raise sp.CalledProcessError(255, "ssh")
 
@@ -608,7 +720,7 @@ class TestParallelDispatch:
         config = _three_host_config(tmp_path)
         calls: list[str] = []
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             calls.append(argv[0])
             raise sp.CalledProcessError(1, argv[0])
 
@@ -625,7 +737,7 @@ class TestParallelDispatch:
         config = _three_host_config(tmp_path)
         prefixes: list[str] = []
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             prefixes.append(prefix)
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)
@@ -639,7 +751,7 @@ class TestParallelDispatch:
         config = _three_host_config(tmp_path)
         prefixes: list[str] = []
 
-        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
             prefixes.append(prefix)
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)

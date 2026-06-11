@@ -109,12 +109,15 @@ hint = "the dockur macOS/Windows VMs need /dev/kvm (bare-metal Linux, or nested 
 check = { linux = ["test -e /dev/kvm"] }
 
 # ssh + rsync run on the *dispatch* host to drive SSH (Windows/macOS VM) targets.
-# Native on macOS/Linux; on Windows ssh ships with OpenSSH client, rsync comes
-# from Git-Bash/MSYS (or dispatch SSH builds from the Linux host / WSL).
+# Native on macOS/Linux. On Windows, ssh ships with the OpenSSH client, but
+# rsync is NOT part of Git for Windows: install it via MSYS2 (pacman -S rsync)
+# or `choco install rsync`, or dispatch SSH builds from the Linux host / WSL.
+# An MSYS/Cygwin rsync cannot drive the native ssh.exe — pin a matching ssh
+# with the endpoint's `rsync_ssh` key (see docs/cross-os-builds.md).
 [tools.ssh]
 hint = "install an OpenSSH client and make sure ssh is on PATH"
 [tools.rsync]
-hint = "install rsync and make sure it is on PATH (Git-Bash/MSYS on Windows)"
+hint = "install rsync and make sure it is on PATH (not bundled with Git for Windows: MSYS2 `pacman -S rsync` or `choco install rsync`, or dispatch from WSL)"
 
 [tools.flutter]
 hint = "install Flutter and make sure flutter is on PATH"

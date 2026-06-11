@@ -87,6 +87,29 @@ class TestRunArgv:
         assert any(line.startswith("[macos] +") for line in lines)
         assert "[macos] payload" in lines
 
+    def test_redact_masks_echo_but_child_gets_value(self, capfd):
+        run_argv(
+            [sys.executable, "-c", "import sys; print('got:' + sys.argv[1])", "hunter2"],
+            Path.cwd(),
+            self._env(),
+            redact=["hunter2"],
+        )
+        out, _err = capfd.readouterr()
+        echo = next(line for line in out.splitlines() if line.startswith("+"))
+        assert "hunter2" not in echo
+        assert "***" in echo
+        assert "got:hunter2" in out  # delivered verbatim to the child
+
+    def test_missing_binary_is_build_error(self):
+        from cepheus_build.errors import BuildError
+
+        with pytest.raises(BuildError, match="not found on PATH"):
+            run_argv(
+                ["definitely-not-a-real-binary-xyz"],
+                Path.cwd(),
+                self._env(),
+            )
+
 # ---------------------------------------------------------------------------
 # should_treat_output_as_failure()
 # ---------------------------------------------------------------------------

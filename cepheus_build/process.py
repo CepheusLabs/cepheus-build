@@ -32,6 +32,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+from .errors import BuildError
+
 COCOAPODS_SPECS_REPAIR_PATTERNS = [
     "CocoaPods's specs repository is too out-of-date",
     "CocoaPods could not find compatible versions for pod",
@@ -56,6 +58,27 @@ _COLOR_FORCE_OFF = False
 # container backend's parallel per-host dispatch). Single-process streaming is
 # unaffected: the lock is uncontended.
 _PRINT_LOCK = threading.Lock()
+
+# Live subprocesses spawned by _run_streaming, so a KeyboardInterrupt in the
+# main thread can terminate children started by WORKER threads (the parallel
+# container dispatch) -- their own KeyboardInterrupt handling never fires
+# because the signal is delivered to the main thread only.
+_ACTIVE_PROCESSES: set[subprocess.Popen[str]] = set()
+_ACTIVE_LOCK = threading.Lock()
+
+
+def locked_print(message: str) -> None:
+    """Whole-line print under the shared output lock (parallel-dispatch safe)."""
+    with _PRINT_LOCK:
+        print(message, flush=True)
+
+
+def terminate_active_processes() -> None:
+    """Terminate every live streamed subprocess (Ctrl-C in parallel dispatch)."""
+    with _ACTIVE_LOCK:
+        active = list(_ACTIVE_PROCESSES)
+    for process in active:
+        terminate_process_tree(process)
 
 
 def set_color_enabled(enabled: bool | None = None, *, no_color: bool | None = None) -> None:
@@ -180,6 +203,7 @@ def run_argv(
     dry_run: bool = False,
     *,
     prefix: str = "",
+    redact: list[str] | None = None,
 ) -> None:
     """Execute ``argv`` directly (no shell) and stream its output.
 
@@ -192,14 +216,26 @@ def run_argv(
     No ``$VAR`` expansion, CocoaPods repair, or output-failure scanning happens
     here -- those behaviors target product build commands, not transport.
     ``prefix`` is prepended to the echoed command and every streamed line
-    (parallel per-host dispatch labels each host's output with it).
+    (parallel per-host dispatch labels each host's output with it). ``redact``
+    values are masked in the ECHOED line only (forwarded secrets embedded in
+    an ssh remote command must not land in GUI/CI logs); the child still
+    receives them verbatim.
     """
     rendered = display_command(argv[0], argv[1:])
+    for secret in redact or []:
+        rendered = rendered.replace(secret, "***")
     with _PRINT_LOCK:
         print(f"{prefix}{style_prefix('+')} {rendered}", flush=True)
     if dry_run:
         return
-    returncode, output = _run_streaming(argv, cwd, env, shell=False, prefix=prefix)
+    try:
+        returncode, output = _run_streaming(argv, cwd, env, shell=False, prefix=prefix)
+    except FileNotFoundError as exc:
+        raise BuildError(
+            f"'{argv[0]}' not found on PATH -- the container backend needs it "
+            "on the dispatch host (see docs/cross-os-builds.md; note rsync is "
+            "not part of Git for Windows)."
+        ) from exc
     if returncode != 0:
         raise subprocess.CalledProcessError(returncode, rendered, output=output)
 
@@ -262,11 +298,16 @@ def _run_streaming(
     for thread in threads:
         thread.start()
 
+    with _ACTIVE_LOCK:
+        _ACTIVE_PROCESSES.add(process)
     try:
         returncode = process.wait()
     except KeyboardInterrupt:
         terminate_process_tree(process)
         raise
+    finally:
+        with _ACTIVE_LOCK:
+            _ACTIVE_PROCESSES.discard(process)
     for pipe in [process.stdout, process.stderr]:
         if pipe is not None and not pipe.closed:
             pipe.close()
