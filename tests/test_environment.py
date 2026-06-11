@@ -2,7 +2,39 @@
 
 from __future__ import annotations
 
-from cepheus_build.environment import expand_env_refs, resolve_value, target_env_values
+from cepheus_build.environment import (
+    _git_token_env,
+    expand_env_refs,
+    resolve_value,
+    target_env_values,
+)
+
+# ---------------------------------------------------------------------------
+# _git_token_env()
+# ---------------------------------------------------------------------------
+
+class TestGitTokenEnv:
+    def test_no_token_no_entries(self):
+        assert _git_token_env({}) == {}
+
+    def test_token_synthesizes_git_config_env(self):
+        extra = _git_token_env({"CEPHEUS_READ_TOKEN": "ghp_abc"})
+        assert extra["GIT_CONFIG_COUNT"] == "1"
+        assert extra["GIT_CONFIG_KEY_0"] == (
+            "url.https://x-access-token:ghp_abc@github.com/.insteadOf"
+        )
+        assert extra["GIT_CONFIG_VALUE_0"] == "https://github.com/"
+        assert extra["GOPRIVATE"] == "github.com/CepheusLabs"
+
+    def test_respects_existing_git_config_entries(self):
+        extra = _git_token_env({"CEPHEUS_READ_TOKEN": "t", "GIT_CONFIG_COUNT": "2"})
+        assert extra["GIT_CONFIG_COUNT"] == "3"
+        assert "GIT_CONFIG_KEY_2" in extra
+
+    def test_does_not_clobber_goprivate(self):
+        extra = _git_token_env({"CEPHEUS_READ_TOKEN": "t", "GOPRIVATE": "example.com/x"})
+        assert "GOPRIVATE" not in extra
+
 
 # ---------------------------------------------------------------------------
 # resolve_value()

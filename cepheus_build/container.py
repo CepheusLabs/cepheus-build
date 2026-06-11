@@ -164,19 +164,28 @@ def env_passthrough_names(config: ProductConfig) -> list[str]:
     return names
 
 
+# Env vars forwarded into every container/VM build when set on the dispatch
+# host, beyond the product's declared dart_defines. CEPHEUS_READ_TOKEN feeds
+# build_env's ephemeral git auth inside the environment (private first-party
+# git pins resolve during pub get / go mod / cargo). Treated as a secret:
+# docker passes it name-only, the ssh echo redacts it.
+EXTRA_ENV_PASSTHROUGH = ["CEPHEUS_READ_TOKEN"]
+
+
 def container_env_pairs(config: ProductConfig, stamp: Stamp) -> list[tuple[str, str]]:
     """(name, value) env pairs to inject into the container/VM build.
 
     Always carries the version stamp computed on the dispatch host (where the
     product's ``.git`` is intact) so the inner build reuses the *same* stamp
     instead of recomputing a different build number from an SSH-synced tree that
-    excludes ``.git``. Adds any set dart_define env vars.
+    excludes ``.git``. Adds any set dart_define env vars and the extra
+    passthrough secrets.
     """
     pairs: list[tuple[str, str]] = [
         ("CBUILD_VERSION", stamp.version),
         ("CBUILD_BUILD_NUMBER", stamp.build_number),
     ]
-    for name in env_passthrough_names(config):
+    for name in (*env_passthrough_names(config), *EXTRA_ENV_PASSTHROUGH):
         value = os.environ.get(name)
         if value:
             pairs.append((name, value))
@@ -279,12 +288,13 @@ def docker_argv(
         "GOWORK=off",
     ]
     # Stamp values are not secret and ride inline; forwarded dart_define env
-    # vars use the name-only ``-e NAME`` form so their VALUES never appear in
-    # the echoed command or logs -- docker reads them from the client process
-    # environment (run_docker_target passes os.environ to run_argv).
+    # vars and passthrough secrets use the name-only ``-e NAME`` form so their
+    # VALUES never appear in the echoed command or logs -- docker reads them
+    # from the client process environment (run_docker_target passes os.environ
+    # to run_argv).
     argv += ["-e", f"CBUILD_VERSION={stamp.version}"]
     argv += ["-e", f"CBUILD_BUILD_NUMBER={stamp.build_number}"]
-    for name in env_passthrough_names(config):
+    for name in (*env_passthrough_names(config), *EXTRA_ENV_PASSTHROUGH):
         if os.environ.get(name):
             argv += ["-e", name]
     for extra in endpoint.get("run_args") or []:

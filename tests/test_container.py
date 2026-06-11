@@ -181,6 +181,21 @@ class TestContainerEnvPairs:
         pairs = dict(container.container_env_pairs(config, STAMP))
         assert "DEMO_UNSET" not in pairs
 
+    def test_read_token_forwarded_when_set(self, tmp_path, monkeypatch):
+        config = _three_host_config(tmp_path)
+        monkeypatch.setenv("CEPHEUS_READ_TOKEN", "ghp_secret")
+        pairs = dict(container.container_env_pairs(config, STAMP))
+        assert pairs["CEPHEUS_READ_TOKEN"] == "ghp_secret"
+
+    def test_read_token_name_only_in_docker_argv(self, tmp_path, monkeypatch):
+        config = _three_host_config(tmp_path)
+        monkeypatch.setenv("CEPHEUS_READ_TOKEN", "ghp_secret")
+        argv = container.docker_argv(
+            config, ["linux"], {"kind": "docker", "image": "img"}, STAMP, _args()
+        )
+        assert "CEPHEUS_READ_TOKEN" in argv
+        assert not any("ghp_secret" in part for part in argv)
+
 
 # ---------------------------------------------------------------------------
 # build subcommand args

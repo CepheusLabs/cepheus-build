@@ -26,12 +26,40 @@ def resolve_value(spec: Any, env: dict[str, str]) -> str:
     return os.path.expandvars(value)
 
 
+def _git_token_env(env: dict[str, str]) -> dict[str, str]:
+    """Ephemeral git auth derived from ``CEPHEUS_READ_TOKEN``.
+
+    First-party dependencies pin private CepheusLabs repos by https git ref
+    (Flutter pub, Go modules, Cargo). Container/VM builds have no interactive
+    credentials, so when ``CEPHEUS_READ_TOKEN`` is set, every git the build
+    spawns authenticates via git's config-from-environment mechanism
+    (git >= 2.31) -- nothing is written to .gitconfig or a credential store,
+    and the token vanishes with the process. ``GOPRIVATE`` keeps Go from
+    consulting the public module proxy for org modules.
+    """
+    token = env.get("CEPHEUS_READ_TOKEN")
+    if not token:
+        return {}
+    count = int(env.get("GIT_CONFIG_COUNT") or 0)
+    extra = {
+        f"GIT_CONFIG_KEY_{count}": (
+            f"url.https://x-access-token:{token}@github.com/.insteadOf"
+        ),
+        f"GIT_CONFIG_VALUE_{count}": "https://github.com/",
+        "GIT_CONFIG_COUNT": str(count + 1),
+    }
+    if not env.get("GOPRIVATE"):
+        extra["GOPRIVATE"] = "github.com/CepheusLabs"
+    return extra
+
+
 def build_env(
     config: ProductConfig,
     stamp: Stamp,
     extra_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
     env = dict(os.environ)
+    env.update(_git_token_env(env))
     env_prefix = str(config.version.get("env_prefix") or config.slug).upper().replace("-", "_")
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (

@@ -146,6 +146,13 @@ step works unchanged.
   in one run shares the same stamp.
 - **dart_define env vars** referenced by `[flutter.dart_defines]` are forwarded
   when set on the dispatch host; unset ones fall back to their declared default.
+- **Private git pins** (forge/slicer/nexus/... by https ref) need read access
+  inside the container/VM at `pub get` / `go mod` time. Set
+  `CEPHEUS_READ_TOKEN` on the dispatch host (e.g.
+  `CEPHEUS_READ_TOKEN=$(gh auth token)`): it is forwarded as a secret
+  (name-only to docker, redacted from echoed ssh commands) and the inner
+  build turns it into **ephemeral** git config-from-env auth plus `GOPRIVATE`
+  — nothing is written to any .gitconfig or credential store.
 
 ## Security / trust boundary
 
