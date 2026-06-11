@@ -336,6 +336,9 @@ class TestRemoteCommand:
         # Errors must terminate: ';' chains regardless of failure, so a failed
         # cd would otherwise run the build in the wrong directory.
         assert cmd.startswith("$ErrorActionPreference = 'Stop'; cd ")
+        # Set-Location does not move the process cwd; children must inherit
+        # the repo dir or '--repo-root .' resolves to sshd's start dir.
+        assert "[Environment]::CurrentDirectory = (Get-Location).Path" in cmd
         # PowerShell needs '&' to invoke a path/quoted command.
         assert "& 'python'" in cmd
         assert "$env:CBUILD_VERSION = '26.6.11'" in cmd

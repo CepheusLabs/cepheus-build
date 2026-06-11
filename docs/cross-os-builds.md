@@ -128,11 +128,22 @@ step works unchanged.
 > of Git for Windows: install it via MSYS2 `pacman -S rsync`, `choco install
 > rsync`, or dispatch from WSL).
 >
-> **Windows dispatch + rsync caveat:** an MSYS2/Cygwin rsync cannot drive the
-> native Win32-OpenSSH `ssh.exe` (incompatible pipe handling). Set
-> `rsync_ssh = "C:/msys64/usr/bin/ssh.exe"` (or your cwRsync's bundled ssh) on
-> the ssh endpoints so rsync's `-e` transport uses a matching ssh; the plain
-> `ssh` steps keep using the native client.
+> **Windows dispatch + rsync caveats** (all verified live):
+>
+> - An MSYS2/Cygwin rsync cannot drive the native Win32-OpenSSH `ssh.exe`
+>   (incompatible pipe handling). The backend auto-pairs the `ssh.exe` that
+>   sits NEXT TO the resolved rsync (cwRsync/MSYS2 ship matching pairs);
+>   `rsync_ssh = "..."` on an endpoint overrides.
+> - Do **not** install cwRsync under `%LOCALAPPDATA%`: processes launched
+>   through a Microsoft Store app-execution alias (the `python3` that a
+>   `#!/usr/bin/env python3` shebang resolves to in Git-Bash) run with MSIX
+>   filesystem virtualization and **cannot see** LocalAppData paths created
+>   outside the container. Put it in `~/.local/bin` (already on the CLI's
+>   augmented PATH) or use a machine-wide install (choco → ProgramData).
+> - The Cygwin ssh ignores `HOME` and resolves `~` to `<cygwin-root>/home/<user>`
+>   (the root is the directory above `ssh.exe`). Junction it to your real
+>   profile once so keys and known_hosts work:
+>   `New-Item -ItemType Junction -Path "$env:USERPROFILE\.local\home\<user>" -Target "$env:USERPROFILE"`
 
 ## Dependencies, stamping, and secrets
 

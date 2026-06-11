@@ -234,9 +234,9 @@ def run_argv(
         returncode, output = _run_streaming(argv, cwd, env, shell=False, prefix=prefix)
     except FileNotFoundError as exc:
         raise BuildError(
-            f"'{argv[0]}' not found on PATH -- the container backend needs it "
-            "on the dispatch host (see docs/cross-os-builds.md; note rsync is "
-            "not part of Git for Windows)."
+            f"'{argv[0]}' not found on PATH ({exc}) -- the container backend "
+            "needs it on the dispatch host (see docs/cross-os-builds.md; note "
+            "rsync is not part of Git for Windows)."
         ) from exc
     if returncode != 0:
         raise subprocess.CalledProcessError(returncode, rendered, output=output)

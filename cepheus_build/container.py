@@ -378,7 +378,14 @@ def remote_command(
         # launcher are normalized to forward slashes (PowerShell accepts them);
         # shlex.split would otherwise eat them as escapes.
         launcher_tokens = shlex.split(launcher.replace("\\", "/"))
-        parts = ["$ErrorActionPreference = 'Stop'", f"cd {_ps_path(remote_repo)}"]
+        parts = [
+            "$ErrorActionPreference = 'Stop'",
+            f"cd {_ps_path(remote_repo)}",
+            # Set-Location does NOT move the PROCESS working directory; child
+            # processes (the launched CLI, and everything it spawns) would
+            # inherit sshd's start dir and resolve '--repo-root .' wrongly.
+            "[Environment]::CurrentDirectory = (Get-Location).Path",
+        ]
         parts += [f"$env:{name} = {_ps_quote(value)}" for name, value in env_pairs]
         invocation = ["&", *(_ps_path(tok) for tok in launcher_tokens)]
         invocation += [_ps_quote(arg) for arg in build_args]
