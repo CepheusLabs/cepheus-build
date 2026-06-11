@@ -131,6 +131,14 @@ def add_container_build_args(parser: argparse.ArgumentParser) -> None:
         default="",
         help="Override the docker/ssh host for every endpoint in the profile.",
     )
+    parser.add_argument(
+        "--parallel-hosts",
+        dest="parallel_hosts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Dispatch OS host groups concurrently, output prefixed per host "
+        "(sequential when --dry-run or --no-keep-going).",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

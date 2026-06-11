@@ -37,6 +37,7 @@ import argparse
 import os
 import shlex
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -618,6 +619,44 @@ def run_ssh_target(
         )
 
 
+def _dispatch_host(
+    config: ProductConfig,
+    profile_name: str,
+    profile: dict[str, Any],
+    host_os: str,
+    host_targets: list[str],
+    stamp: Stamp,
+    args: argparse.Namespace,
+    *,
+    prefix: str = "",
+) -> tuple[str, str] | None:
+    """Build one host group; return ``(where, message)`` on failure, else None."""
+    label = " ".join(host_targets)
+    try:
+        endpoint = host_endpoint(profile, host_os)
+        kind = str(endpoint.get("kind") or "").lower()
+        if kind == "docker":
+            run_docker_target(config, host_targets, endpoint, stamp, args, prefix=prefix)
+        elif kind == "ssh":
+            run_ssh_target(
+                config, host_os, host_targets, endpoint, stamp, args, prefix=prefix
+            )
+        else:
+            raise BuildError(
+                f"container profile '{profile_name}' {host_os} endpoint has "
+                f"unknown kind '{kind}' (expected 'docker' or 'ssh')."
+            )
+    except (BuildError, subprocess.CalledProcessError) as exc:
+        message = (
+            f"command failed with exit code {exc.returncode}"
+            if isinstance(exc, subprocess.CalledProcessError)
+            else str(exc)
+        )
+        print(f"{prefix}failed: {host_os} ({label}): {message}")
+        return (f"{host_os}: {label}", message)
+    return None
+
+
 def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
     profile_name = getattr(args, "container_profile", None) or default_profile_name()
     profile = container_profile_config(profile_name)
@@ -632,31 +671,46 @@ def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:
         f"({stamp.full}) via profile '{profile_name}'"
     )
 
+    # Host groups are independent (different machines / a local container), so
+    # they dispatch concurrently by default, each output line prefixed with its
+    # host. Sequential fallbacks: a single group (nothing to parallelize),
+    # --no-parallel-hosts, --no-keep-going (abort-on-first-failure needs an
+    # order), and --dry-run (a preview should read top-to-bottom).
+    parallel = (
+        getattr(args, "parallel_hosts", True)
+        and len(grouped) > 1
+        and getattr(args, "keep_going", True)
+        and not getattr(args, "dry_run", False)
+    )
+
     failures: list[tuple[str, str]] = []
-    for host_os, host_targets in grouped.items():
-        endpoint = host_endpoint(profile, host_os)
-        kind = str(endpoint.get("kind") or "").lower()
-        label = " ".join(host_targets)
-        try:
-            if kind == "docker":
-                run_docker_target(config, host_targets, endpoint, stamp, args)
-            elif kind == "ssh":
-                run_ssh_target(config, host_os, host_targets, endpoint, stamp, args)
-            else:
-                raise BuildError(
-                    f"container profile '{profile_name}' {host_os} endpoint has "
-                    f"unknown kind '{kind}' (expected 'docker' or 'ssh')."
+    if parallel:
+        print(f"dispatching {len(grouped)} OS hosts in parallel: {', '.join(grouped)}")
+        with ThreadPoolExecutor(max_workers=len(grouped)) as pool:
+            futures = [
+                pool.submit(
+                    _dispatch_host,
+                    config,
+                    profile_name,
+                    profile,
+                    host_os,
+                    host_targets,
+                    stamp,
+                    args,
+                    prefix=f"[{host_os}] ",
                 )
-        except (BuildError, subprocess.CalledProcessError) as exc:
-            message = (
-                f"command failed with exit code {exc.returncode}"
-                if isinstance(exc, subprocess.CalledProcessError)
-                else str(exc)
+                for host_os, host_targets in grouped.items()
+            ]
+            failures = [failure for future in futures if (failure := future.result())]
+    else:
+        for host_os, host_targets in grouped.items():
+            failure = _dispatch_host(
+                config, profile_name, profile, host_os, host_targets, stamp, args
             )
-            failures.append((f"{host_os}: {label}", message))
-            print(f"failed: {host_os} ({label}): {message}")
-            if not getattr(args, "keep_going", True):
-                break
+            if failure:
+                failures.append(failure)
+                if not getattr(args, "keep_going", True):
+                    break
 
     if failures:
         print("\n## Container build summary")

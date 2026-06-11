@@ -67,6 +67,7 @@ def _args(**overrides) -> SimpleNamespace:
         dry_run=False,
         container_profile="default",
         container_host="",
+        parallel_hosts=True,
         targets=None,
     )
     base.update(overrides)
@@ -564,3 +565,87 @@ class TestCmdContainerBuild:
         monkeypatch.setattr(container, "run_argv", fake_run_argv)
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 1
+
+
+class TestParallelDispatch:
+    def test_parallel_prefixes_per_host(self, tmp_path, monkeypatch):
+        config = _three_host_config(tmp_path)
+        prefixes: list[str] = []
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            prefixes.append(prefix)
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(
+            config, _args(targets=["linux", "macos", "windows"])
+        )
+        assert rc == 0
+        assert set(prefixes) == {"[linux] ", "[macos] ", "[windows] "}
+
+    def test_parallel_aggregates_failures_across_hosts(self, tmp_path, monkeypatch, capsys):
+        import subprocess as sp
+
+        config = _three_host_config(tmp_path)
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            if argv[0] == "ssh":
+                raise sp.CalledProcessError(255, "ssh")
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(
+            config, _args(targets=["linux", "macos", "windows"])
+        )
+        assert rc == 1
+        out = capsys.readouterr().out
+        # Both ssh hosts failed; the docker (linux) host is not in the summary.
+        assert "macos: macos" in out
+        assert "windows: windows" in out
+        assert "linux: linux" not in out
+
+    def test_no_keep_going_is_sequential_and_stops(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        config = _three_host_config(tmp_path)
+        calls: list[str] = []
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            calls.append(argv[0])
+            raise sp.CalledProcessError(1, argv[0])
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(
+            config,
+            _args(targets=["linux", "macos", "windows"], keep_going=False),
+        )
+        assert rc == 1
+        # Stopped after the first host group (linux's single docker call).
+        assert calls == ["docker"]
+
+    def test_dry_run_is_sequential_without_prefixes(self, tmp_path, monkeypatch):
+        config = _three_host_config(tmp_path)
+        prefixes: list[str] = []
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            prefixes.append(prefix)
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(
+            config, _args(targets=["linux", "macos", "windows"], dry_run=True)
+        )
+        assert rc == 0
+        assert set(prefixes) == {""}
+
+    def test_opt_out_flag_is_sequential(self, tmp_path, monkeypatch):
+        config = _three_host_config(tmp_path)
+        prefixes: list[str] = []
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            prefixes.append(prefix)
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(
+            config,
+            _args(targets=["linux", "macos", "windows"], parallel_hosts=False),
+        )
+        assert rc == 0
+        assert set(prefixes) == {""}

@@ -95,6 +95,12 @@ cepheus-build build -p printdeck-app all --execution-mode container
 cepheus-build build -p printdeck-app macos windows linux --execution-mode container
 ```
 
+OS host groups dispatch **in parallel** by default (the Linux container builds
+while both VMs build), each output line prefixed `[linux] ` / `[macos] ` /
+`[windows] `. Dispatch turns sequential (unprefixed) with `--no-parallel-hosts`,
+under `--dry-run` (a preview should read top-to-bottom), or with
+`--no-keep-going` (abort-on-first-failure needs an order).
+
 Artifacts always end up in the **host** product repo: the docker path
 bind-mounts it, and the ssh path rsyncs each target's **declared artifact
 paths** back after the build (the glob-free prefix of every `artifacts`
