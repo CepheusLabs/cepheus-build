@@ -383,6 +383,23 @@ class TestRsyncArgv:
         transport = argv[argv.index("-e") + 1]
         assert transport.startswith("C:/msys64/usr/bin/ssh.exe")
 
+    def test_transport_prefers_sibling_ssh_over_plain(self, monkeypatch, tmp_path):
+        # With no rsync_ssh pin, the ssh co-located with rsync wins on Windows
+        # (cwRsync/MSYS2 ship a matching pair); plain "ssh" is the fallback.
+        sibling = tmp_path / "ssh.exe"
+        sibling.write_bytes(b"")
+        monkeypatch.setattr(container.os, "name", "nt")
+        monkeypatch.setattr(
+            container.shutil, "which", lambda name: str(tmp_path / "rsync.exe")
+        )
+        transport = container._rsync_transport({}, [])
+        assert transport.startswith(sibling.as_posix())
+
+    def test_transport_plain_ssh_when_no_sibling(self, monkeypatch):
+        monkeypatch.setattr(container.shutil, "which", lambda name: None)
+        transport = container._rsync_transport({}, [])
+        assert transport.startswith("ssh ")
+
     def test_pull_is_relative_with_anchor(self):
         argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build/macos", [])
         assert "--relative" in argv

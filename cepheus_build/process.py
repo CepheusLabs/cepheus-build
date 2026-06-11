@@ -134,6 +134,8 @@ def augment_process_path() -> None:
         Path.home() / ".cargo" / "bin",
         Path.home() / ".pub-cache" / "bin",
         Path.home() / ".local" / "bin",
+        # cwRsync (user-level rsync for Windows dispatch hosts).
+        Path.home() / "AppData" / "Local" / "cwrsync" / "bin",
         Path("/opt/homebrew/bin"),
         Path("/opt/homebrew/sbin"),
         Path("/usr/local/bin"),

@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
+import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -533,15 +534,33 @@ def _rsync_remote_path(remote_repo: str) -> str:
     return remote_repo
 
 
+def _sibling_ssh() -> str | None:
+    """An ssh.exe living NEXT TO the resolved rsync binary, if any (Windows).
+
+    A Cygwin/MSYS rsync cannot drive the native Win32-OpenSSH ssh.exe
+    (incompatible pipe handling), but every Windows rsync distribution
+    (cwRsync, MSYS2) ships a matching ssh in the same directory -- prefer it
+    automatically so dispatch hosts need no per-machine config.
+    """
+    if os.name != "nt":
+        return None
+    rsync_path = shutil.which("rsync")
+    if not rsync_path:
+        return None
+    candidate = Path(rsync_path).parent / "ssh.exe"
+    if candidate.exists():
+        return candidate.as_posix()
+    return None
+
+
 def _rsync_transport(endpoint: dict[str, Any], port_opts: list[str]) -> str:
     """The ``-e`` remote-shell string for rsync (ssh + port + batch options).
 
-    ``rsync_ssh`` in the endpoint pins which ssh binary rsync spawns: an
-    MSYS2/Cygwin rsync on a Windows dispatch host cannot drive the native
-    Win32-OpenSSH ssh.exe (incompatible pipe handling), so point it at the
-    matching MSYS ssh, e.g. ``rsync_ssh = "C:/msys64/usr/bin/ssh.exe"``.
+    The ssh binary rsync spawns is, in order: the endpoint's ``rsync_ssh``
+    pin, the ssh.exe co-located with rsync on Windows (see
+    :func:`_sibling_ssh`), else plain ``ssh`` from PATH.
     """
-    ssh_program = str(endpoint.get("rsync_ssh") or "ssh")
+    ssh_program = str(endpoint.get("rsync_ssh") or _sibling_ssh() or "ssh")
     return " ".join([ssh_program, *port_opts, *SSH_BATCH_OPTS])
 
 
