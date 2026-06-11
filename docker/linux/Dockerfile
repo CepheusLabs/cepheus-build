@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl wget git unzip zip xz-utils \
         bash make cmake ninja-build clang pkg-config file \
         libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
+        libwebkit2gtk-4.1-dev \
         openssh-client rsync sudo \
         openjdk-17-jdk-headless \
         dpkg-dev rpm fakeroot \
