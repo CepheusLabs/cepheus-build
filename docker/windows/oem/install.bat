@@ -74,6 +74,17 @@ if not exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\
     echo   "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --norestart --wait
 )
 
+REM --- vcpkg + OpenSSL --------------------------------------------------------
+REM printdeck-app's Windows lane links OpenSSL from a user vcpkg checkout
+REM (scripts/build_windows.ps1 expects %USERPROFILE%\vcpkg\installed\x64-windows).
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git >nul 2>&1
+git clone https://github.com/microsoft/vcpkg "%USERPROFILE%\vcpkg"
+call "%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+"%USERPROFILE%\vcpkg\vcpkg.exe" install openssl:x64-windows
+if %ERRORLEVEL% NEQ 0 (
+    echo [cepheus] WARNING: vcpkg openssl install failed with %ERRORLEVEL% -- printdeck windows builds need it.
+)
+
 echo [cepheus] provisioning complete.
 echo [cepheus] NEXT: clone cepheus-build to %USERPROFILE%\cepheus-build
 echo           (and add your SSH key if it was not seeded from the oem dir)

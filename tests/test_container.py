@@ -249,15 +249,27 @@ class TestDockerArgv:
     def _endpoint(self):
         return {"kind": "docker", "image": "img:latest", "workdir": "/work"}
 
-    def test_bind_mounts_and_image(self, tmp_path):
+    def test_mounts_src_and_toolkit(self, tmp_path):
         config = _three_host_config(tmp_path)
         argv = container.docker_argv(config, ["linux"], self._endpoint(), STAMP, _args())
         assert argv[0] == "docker"
         assert "run" in argv and "--rm" in argv
         joined = " ".join(argv)
-        assert f"{config.repo_root}:/work" in joined
+        # The repo mounts at /src; the entrypoint copies it into /work and
+        # builds there (host caches must not leak into the container build).
+        assert f"{config.repo_root}:/src" in joined
         assert "/opt/cepheus-build:ro" in joined
         assert "img:latest" in argv
+
+    def test_copy_isolation_contract_env(self, tmp_path):
+        config = _three_host_config(tmp_path)
+        argv = container.docker_argv(config, ["linux"], self._endpoint(), STAMP, _args())
+        assert "CBUILD_SYNC_SOURCE=/src" in argv
+        excludes = next(a for a in argv if a.startswith("CBUILD_SYNC_EXCLUDES="))
+        assert "pubspec_overrides.yaml" in excludes
+        assert ".dart_tool/" in excludes
+        roots = next(a for a in argv if a.startswith("CBUILD_PULL_ROOTS="))
+        assert roots == "CBUILD_PULL_ROOTS=build/linux"
 
     def test_injects_gowork_off_and_stamp(self, tmp_path):
         config = _three_host_config(tmp_path)
@@ -368,6 +380,11 @@ class TestRemoteCommand:
 
 
 class TestRsyncArgv:
+    @pytest.fixture(autouse=True)
+    def _no_sibling_ssh(self, monkeypatch):
+        """Default-transport assertions must not depend on this machine's rsync."""
+        monkeypatch.setattr(container, "_sibling_ssh", lambda: None)
+
     def test_push_excludes_overrides_and_output_trees(self):
         argv = container.rsync_push_argv("u@h:cbuild/demo", ["-p", "2222"])
         joined = " ".join(argv)
@@ -401,6 +418,14 @@ class TestRsyncArgv:
         transport = argv[argv.index("-e") + 1]
         assert transport.startswith("C:/msys64/usr/bin/ssh.exe")
 
+    def test_pull_is_relative_with_anchor(self):
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build/macos", [])
+        assert "--relative" in argv
+        assert argv[-2] == "u@h:cbuild/demo/./build/macos"
+        assert argv[-1] == "."
+
+
+class TestSiblingSsh:
     def test_transport_prefers_sibling_ssh_over_plain(self, monkeypatch, tmp_path):
         # With no rsync_ssh pin, the ssh co-located with rsync wins on Windows
         # (cwRsync/MSYS2 ship a matching pair); plain "ssh" is the fallback.
@@ -417,12 +442,6 @@ class TestRsyncArgv:
         monkeypatch.setattr(container.shutil, "which", lambda name: None)
         transport = container._rsync_transport({}, [])
         assert transport.startswith("ssh ")
-
-    def test_pull_is_relative_with_anchor(self):
-        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build/macos", [])
-        assert "--relative" in argv
-        assert argv[-2] == "u@h:cbuild/demo/./build/macos"
-        assert argv[-1] == "."
 
 
 # ---------------------------------------------------------------------------

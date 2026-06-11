@@ -9,9 +9,11 @@ The key property: inside the matching OS, :func:`cepheus_build.config.current_ho
 already returns the right value, so host gating, version stamping, tool checks,
 and artifact globbing all work unchanged. This module only provides transport:
 
-* ``kind = "docker"`` (Linux): ``docker run`` a build image with the product repo
-  bind-mounted and this toolkit mounted read-only. Artifacts land in the bind
-  mount, so they are already on the host afterwards.
+* ``kind = "docker"`` (Linux): ``docker run`` a build image with the product
+  repo mounted at ``/src`` and this toolkit mounted read-only. The image
+  entrypoint copies the repo (minus host caches/outputs) into the container's
+  own workdir, builds there, and writes only the declared artifact roots back
+  to the mount -- the same isolation contract as the ssh transport.
 * ``kind = "ssh"`` (Windows / macOS): ``rsync`` the repo into a dockur KVM VM,
   ``ssh`` the build, then ``rsync`` the targets' declared artifact paths back
   so the existing ``artifacts`` step finds the outputs.
@@ -90,7 +92,14 @@ SSH_BATCH_OPTS = [
 # Where this toolkit is mounted inside a Linux build container (read-only).
 TOOLKIT_MOUNT = "/opt/cepheus-build"
 
-# Default in-container working directory (the bind-mounted product repo).
+# Where the host product repo is mounted inside a Linux build container. The
+# build does NOT run here: the entrypoint copies it (minus RSYNC_EXCLUDES)
+# into the workdir and writes only the declared artifact roots back -- a
+# host .dart_tool/package_config.json would point dart at HOST SDK paths,
+# and a container-side pub get would poison the host right back.
+SRC_MOUNT = "/src"
+
+# Default in-container working directory (the container-local build copy).
 DEFAULT_WORKDIR = "/work"
 
 
@@ -274,18 +283,26 @@ def docker_argv(
             "(--container-host only overrides ssh endpoints)."
         )
 
+    roots = artifact_pull_roots(config, targets)
     argv: list[str] = [
         "docker",
         "run",
         "--rm",
         "-v",
-        f"{config.repo_root}:{workdir}",
+        f"{config.repo_root}:{SRC_MOUNT}",
         "-v",
         f"{TOOL_ROOT}:{TOOLKIT_MOUNT}:ro",
         "-w",
         workdir,
         "-e",
         "GOWORK=off",
+        # Copy-isolation contract with the image entrypoint (see SRC_MOUNT).
+        "-e",
+        f"CBUILD_SYNC_SOURCE={SRC_MOUNT}",
+        "-e",
+        f"CBUILD_SYNC_EXCLUDES={' '.join(RSYNC_EXCLUDES)}",
+        "-e",
+        f"CBUILD_PULL_ROOTS={' '.join(roots)}",
     ]
     # Stamp values are not secret and ride inline; forwarded dart_define env
     # vars and passthrough secrets use the name-only ``-e NAME`` form so their
@@ -652,21 +669,6 @@ def group_targets_by_host(config: ProductConfig, targets: list[str]) -> dict[str
     return {host: grouped[host] for host in HOST_ORDER if host in grouped}
 
 
-def _warn_local_overrides(repo_root: Path, *, prefix: str = "") -> None:
-    overrides = [
-        name
-        for name in ("pubspec_overrides.yaml", "go.work")
-        if (repo_root / name).exists()
-    ]
-    if overrides:
-        joined = ", ".join(overrides)
-        locked_print(
-            f"{prefix}warning: {joined} present in {repo_root}; container/VM builds "
-            "use committed pins (GOWORK=off bypasses go.work; remove "
-            "pubspec_overrides.yaml for a clean Flutter build)."
-        )
-
-
 def run_docker_target(
     config: ProductConfig,
     targets: list[str],
@@ -676,7 +678,6 @@ def run_docker_target(
     *,
     prefix: str = "",
 ) -> None:
-    _warn_local_overrides(config.repo_root, prefix=prefix)
     argv = docker_argv(config, targets, endpoint, stamp, args)
     run_argv(argv, TOOL_ROOT, dict(os.environ), getattr(args, "dry_run", False), prefix=prefix)
 
