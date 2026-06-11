@@ -51,7 +51,8 @@ class TestComposeArgv:
         )
         assert cwd is None
         assert argv[0] == "ssh"
-        assert argv[1] == "errai@192.168.0.98"
+        assert "BatchMode=yes" in argv
+        assert argv[-2] == "errai@192.168.0.98"
         remote = argv[-1]
         # ~ expands on the REMOTE side ($HOME), never the dispatch host.
         assert remote.startswith('cd "$HOME"/cepheus-build/docker && docker compose')
@@ -60,6 +61,12 @@ class TestComposeArgv:
     def test_remote_port_option(self):
         argv, _cwd = vm.compose_argv({"host": "h", "port": 2222}, ["ps"])
         assert argv[:3] == ["ssh", "-p", "2222"]
+
+    def test_option_like_host_rejected(self):
+        with pytest.raises(BuildError):
+            vm.compose_argv({"host": "-oProxyCommand=evil"}, ["ps"])
+        with pytest.raises(BuildError):
+            vm.compose_argv({"host": "h", "user": "-bad"}, ["ps"])
 
     def test_remote_default_dir(self):
         argv, _cwd = vm.compose_argv({"host": "h"}, ["ps"])

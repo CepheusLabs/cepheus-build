@@ -32,6 +32,7 @@ from typing import Any, Callable
 
 from .config import HOST_ORDER, TOOL_ROOT
 from .container import (
+    SSH_BATCH_OPTS,
     _posix_path,
     _ssh_base,
     container_profile_config,
@@ -61,6 +62,10 @@ def compose_argv(
     if not host:
         return (["docker", "compose", *action_args], TOOL_ROOT / "docker")
     user = compose_cfg.get("user")
+    for token in (str(host), str(user or "")):
+        # A leading '-' would be parsed as an ssh OPTION, not a destination.
+        if token.startswith("-"):
+            raise BuildError(f"Invalid compose user/host '{token}' (must not start with '-').")
     destination = f"{user}@{host}" if user else str(host)
     port_opts = ["-p", str(compose_cfg["port"])] if compose_cfg.get("port") else []
     directory = str(compose_cfg.get("dir") or DEFAULT_COMPOSE_DIR)
@@ -68,7 +73,7 @@ def compose_argv(
         f"cd {_posix_path(directory)} && docker compose "
         + " ".join(shlex.quote(arg) for arg in action_args)
     )
-    return (["ssh", *port_opts, destination, remote], None)
+    return (["ssh", *port_opts, *SSH_BATCH_OPTS, destination, remote], None)
 
 
 def ssh_probe_argv(endpoint: dict[str, Any]) -> list[str]:
