@@ -48,10 +48,12 @@ def _three_host_config(tmp_path) -> ProductConfig:
         [targets.macos]
         hosts = ["macos"]
         commands = ["make macos"]
+        artifacts = ["build/macos/Build/Products/Release/demo.app", "dist/macos/Demo-*.dmg"]
 
         [targets.windows]
         hosts = ["windows"]
         commands = ["make windows"]
+        artifacts = ["packaging/windows/dist/*.exe"]
         """,
     )
 
@@ -326,10 +328,91 @@ class TestRsyncArgv:
         assert argv[-1] == "u@h:cbuild/demo/"
 
     def test_pull_is_relative_with_anchor(self):
-        argv = container.rsync_pull_argv("u@h:cbuild/demo", [])
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", ["build/macos"], [])
         assert "--relative" in argv
-        assert argv[-2] == "u@h:cbuild/demo/./build"
+        assert argv[-2] == "u@h:cbuild/demo/./build/macos"
         assert argv[-1] == "."
+
+    def test_pull_multiple_roots_share_one_connection(self):
+        argv = container.rsync_pull_argv(
+            "u@h", "cbuild/demo", ["build/macos", "dist/macos"], []
+        )
+        # rsync source args after the first may omit the host part.
+        assert "u@h:cbuild/demo/./build/macos" in argv
+        assert ":cbuild/demo/./dist/macos" in argv
+
+    def test_pull_no_roots_raises(self):
+        with pytest.raises(BuildError):
+            container.rsync_pull_argv("u@h", "cbuild/demo", [], [])
+
+
+# ---------------------------------------------------------------------------
+# artifact pull roots
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactPullRoots:
+    def test_glob_file_yields_parent_dir(self):
+        assert container._glob_free_root("build/macos/printdeck-*-macos.dmg") == "build/macos"
+
+    def test_literal_path_returned_whole(self):
+        assert (
+            container._glob_free_root("target/x86_64-unknown-linux-gnu/release/foundry")
+            == "target/x86_64-unknown-linux-gnu/release/foundry"
+        )
+
+    def test_first_segment_glob_yields_none(self):
+        assert container._glob_free_root("*/dist") is None
+
+    def test_question_mark_and_brackets_are_globs(self):
+        assert container._glob_free_root("dist/v?/app") == "dist"
+        assert container._glob_free_root("dist/[ab]/app") == "dist"
+
+    def test_roots_union_across_targets(self, tmp_path):
+        config = _three_host_config(tmp_path)
+        roots = container.artifact_pull_roots(config, ["macos", "windows"])
+        assert roots == [
+            "build/macos/Build/Products/Release/demo.app",
+            "dist/macos",
+            "packaging/windows/dist",
+        ]
+
+    def test_nested_roots_collapse_into_ancestor(self, tmp_path):
+        config = _config(
+            tmp_path,
+            """\
+            [targets.linux]
+            hosts = ["linux"]
+            commands = ["make linux"]
+            artifacts = ["build/linux/x64/release/bundle", "build/linux/demo-*.deb", "build/linux"]
+            """,
+        )
+        assert container.artifact_pull_roots(config, ["linux"]) == ["build/linux"]
+
+    def test_no_artifacts_warns_and_returns_empty(self, tmp_path, capsys):
+        config = _config(
+            tmp_path,
+            """\
+            [targets.macos]
+            hosts = ["macos"]
+            commands = ["make macos"]
+            """,
+        )
+        assert container.artifact_pull_roots(config, ["macos"]) == []
+        assert "declares no artifacts" in capsys.readouterr().out
+
+    def test_absolute_artifact_skipped(self, tmp_path, capsys):
+        config = _config(
+            tmp_path,
+            """\
+            [targets.macos]
+            hosts = ["macos"]
+            commands = ["make macos"]
+            artifacts = ["/tmp/out.dmg", "C:/out/demo.msix", "dist/demo.dmg"]
+            """,
+        )
+        assert container.artifact_pull_roots(config, ["macos"]) == ["dist/demo.dmg"]
+        assert "is absolute" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -453,3 +536,31 @@ class TestCmdContainerBuild:
         config = _three_host_config(tmp_path)
         with pytest.raises(BuildError):
             container.cmd_container_build(config, _args(targets=["linux"], container_profile="ghost"))
+
+    def test_pull_missing_roots_tolerated(self, tmp_path, monkeypatch, capsys):
+        """rsync exit 23 on the artifact pull is a warning, not a failure."""
+        import subprocess as sp
+
+        config = _three_host_config(tmp_path)
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            if argv[0] == "rsync" and "--relative" in argv:
+                raise sp.CalledProcessError(23, "rsync")
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(config, _args(targets=["macos"]))
+        assert rc == 0
+        assert "rsync exit 23" in capsys.readouterr().out
+
+    def test_pull_real_rsync_error_still_fails(self, tmp_path, monkeypatch):
+        import subprocess as sp
+
+        config = _three_host_config(tmp_path)
+
+        def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+            if argv[0] == "rsync" and "--relative" in argv:
+                raise sp.CalledProcessError(12, "rsync")
+
+        monkeypatch.setattr(container, "run_argv", fake_run_argv)
+        rc = container.cmd_container_build(config, _args(targets=["macos"]))
+        assert rc == 1

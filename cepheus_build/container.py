@@ -13,8 +13,8 @@ and artifact globbing all work unchanged. This module only provides transport:
   bind-mounted and this toolkit mounted read-only. Artifacts land in the bind
   mount, so they are already on the host afterwards.
 * ``kind = "ssh"`` (Windows / macOS): ``rsync`` the repo into a dockur KVM VM,
-  ``ssh`` the build, then ``rsync`` the ``build/`` tree back so the existing
-  ``artifacts`` step finds the outputs.
+  ``ssh`` the build, then ``rsync`` the targets' declared artifact paths back
+  so the existing ``artifacts`` step finds the outputs.
 
 Endpoints come from ``[container_profiles.<name>]`` in ``build.toml``. See
 ``docs/cross-os-builds.md`` and ``docker/compose.yml`` for the VM pool.
@@ -52,9 +52,8 @@ from .errors import BuildError
 from .github import preferred_host_for_target
 from .process import run_argv, style_prefix
 
-# The host-relative subtree that holds every build output. One rsync of this
-# directory brings all of a host's target artifacts back from an SSH VM.
-ARTIFACT_DIR = "build"
+# Characters that make a path segment a glob pattern rather than a literal.
+_GLOB_CHARS = frozenset("*?[")
 
 # Files that exist only for local sibling-checkout development. Container/VM
 # builds use committed pins instead, so these are never shipped into the build
@@ -386,6 +385,67 @@ def _ps_path(value: str) -> str:
     return _ps_quote(value)
 
 
+def _glob_free_root(artifact: str) -> str | None:
+    """Longest leading path of ``artifact`` that contains no glob characters.
+
+    ``build/macos/printdeck-*-macos.dmg`` → ``build/macos``; a fully literal
+    path (file or directory) is returned whole. ``None`` when the very first
+    segment is globbed -- there is nothing safe to anchor a pull on.
+    """
+    parts = [p for p in artifact.replace("\\", "/").split("/") if p and p != "."]
+    clean: list[str] = []
+    for part in parts:
+        if _GLOB_CHARS.intersection(part):
+            break
+        clean.append(part)
+    if not clean:
+        return None
+    return "/".join(clean)
+
+
+def artifact_pull_roots(config: ProductConfig, targets: list[str]) -> list[str]:
+    """Repo-relative paths to rsync back from an SSH VM after a build.
+
+    Derived from each target's declared ``artifacts`` globs (the same source
+    of truth the ``artifacts`` subcommand resolves), so DMGs under ``dist/``,
+    installers under ``packaging/*/dist/``, and Rust binaries under
+    ``target/`` all come home -- not just the Flutter ``build/`` tree. Roots
+    nested inside another root collapse into the ancestor.
+    """
+    roots: list[str] = []
+    for target_name in targets:
+        target = config.target(target_name)
+        artifacts = [str(item) for item in (target.get("artifacts") or [])]
+        if not artifacts:
+            print(
+                f"warning: target '{target_name}' declares no artifacts; "
+                "nothing will be pulled back from the VM for it."
+            )
+            continue
+        for artifact in artifacts:
+            normalized = artifact.replace("\\", "/")
+            if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
+                print(
+                    f"warning: artifact '{artifact}' is absolute; only "
+                    "repo-relative artifacts are pulled back from a VM."
+                )
+                continue
+            root = _glob_free_root(normalized)
+            if root is None:
+                print(
+                    f"warning: artifact '{artifact}' globs its first path "
+                    "segment; cannot derive a pull root for it."
+                )
+                continue
+            if root not in roots:
+                roots.append(root)
+    return sorted(
+        root
+        for root in roots
+        if not any(other != root and root.startswith(f"{other}/") for other in roots)
+    )
+
+
 def _rsync_remote_path(remote_repo: str) -> str:
     """``remote_repo`` as an rsync remote path: relative to the remote home.
 
@@ -417,22 +477,25 @@ def rsync_push_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
     return argv
 
 
-def rsync_pull_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
-    """rsync argv pulling the artifact tree back into ``cwd`` (= repo_root).
+def rsync_pull_argv(
+    destination: str,
+    remote_path: str,
+    roots: list[str],
+    port_opts: list[str],
+) -> list[str]:
+    """rsync argv pulling artifact ``roots`` back into ``cwd`` (= repo_root).
 
-    ``--relative`` with the ``/./`` anchor recreates the artifact path under
-    the local repo, creating implied directories as needed.
+    ``--relative`` with the ``/./`` anchor recreates each root's path under
+    the local repo, creating implied directories as needed. All roots ride one
+    connection: rsync lets source args after the first omit the host part
+    (``user@host:p1 :p2 ...``).
     """
+    if not roots:
+        raise BuildError("rsync_pull_argv called with no artifact roots.")
     ssh_cmd = " ".join(["ssh", *port_opts])
-    return [
-        "rsync",
-        "-az",
-        "--relative",
-        "-e",
-        ssh_cmd,
-        f"{remote_spec}/./{ARTIFACT_DIR}",
-        ".",
-    ]
+    sources = [f"{destination}:{remote_path}/./{roots[0]}"]
+    sources += [f":{remote_path}/./{root}" for root in roots[1:]]
+    return ["rsync", "-az", "--relative", "-e", ssh_cmd, *sources, "."]
 
 
 # ---------------------------------------------------------------------------
@@ -508,7 +571,7 @@ def run_ssh_target(
         endpoint, host_override=getattr(args, "container_host", None)
     )
     remote_repo = _remote_repo(endpoint, config.slug)
-    remote_spec = f"{destination}:{_rsync_remote_path(remote_repo)}"
+    remote_path = _rsync_remote_path(remote_repo)
     launcher = _default_launcher(host_os, endpoint)
     shell = _remote_shell(host_os, endpoint)
     env = dict(os.environ)
@@ -521,7 +584,7 @@ def run_ssh_target(
     # 1. Push a clean copy of the repo (committed-pins; overrides excluded).
     #    cwd=repo_root: the rsync source is the literal ``./`` (see
     #    rsync_push_argv on why drive-letter paths must stay out of the argv).
-    push = rsync_push_argv(remote_spec, port_opts)
+    push = rsync_push_argv(f"{destination}:{remote_path}", port_opts)
     run_argv(push, config.repo_root, env, dry_run, prefix=prefix)
 
     # 2. Run the build inside the VM. The remote command is ONE argv element,
@@ -532,9 +595,27 @@ def run_ssh_target(
     )
     run_argv(["ssh", *port_opts, destination, remote], TOOL_ROOT, env, dry_run, prefix=prefix)
 
-    # 3. Pull the build outputs back so `artifacts` finds them on the host.
-    pull = rsync_pull_argv(remote_spec, port_opts)
-    run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
+    # 3. Pull the declared artifact paths back so `artifacts` finds them on
+    #    the host. A missing root (rsync exit 23) is downgraded to a warning:
+    #    the build itself succeeded, and the host-side `artifacts` step is the
+    #    authoritative check on which outputs exist.
+    roots = artifact_pull_roots(config, targets)
+    if not roots:
+        print(
+            f"{prefix}warning: no artifact roots to pull back for "
+            f"{', '.join(targets)}."
+        )
+        return
+    pull = rsync_pull_argv(destination, remote_path, roots, port_opts)
+    try:
+        run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode != 23:
+            raise
+        print(
+            f"{prefix}warning: some declared artifact paths were not found on "
+            "the VM (rsync exit 23); `artifacts` will report what is missing."
+        )
 
 
 def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:

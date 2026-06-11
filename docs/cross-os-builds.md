@@ -95,9 +95,11 @@ cepheus-build build -p printdeck-app all --execution-mode container
 cepheus-build build -p printdeck-app macos windows linux --execution-mode container
 ```
 
-Artifacts always end up under the **host** product repo's `build/` tree: the
-docker path bind-mounts it; the ssh path rsyncs `build/` back after the build,
-so the normal `cepheus-build artifacts -p <product> <targets> --copy-to dist/`
+Artifacts always end up in the **host** product repo: the docker path
+bind-mounts it, and the ssh path rsyncs each target's **declared artifact
+paths** back after the build (the glob-free prefix of every `artifacts`
+entry — `build/...`, `dist/...`, `packaging/*/dist/...`, `target/...`), so
+the normal `cepheus-build artifacts -p <product> <targets> --copy-to dist/`
 step works unchanged.
 
 > **Dispatch works from any host shell.** Transport commands (docker / ssh /
