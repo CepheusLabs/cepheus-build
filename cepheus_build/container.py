@@ -193,6 +193,9 @@ def container_env_pairs(config: ProductConfig, stamp: Stamp) -> list[tuple[str, 
     pairs: list[tuple[str, str]] = [
         ("CBUILD_VERSION", stamp.version),
         ("CBUILD_BUILD_NUMBER", stamp.build_number),
+        # Tells the inner build it runs in a disposable work copy (enables
+        # e.g. neutralizing committed sibling-path dependency_overrides).
+        ("CBUILD_CONTAINER_BUILD", "1"),
     ]
     for name in (*env_passthrough_names(config), *EXTRA_ENV_PASSTHROUGH):
         value = os.environ.get(name)
@@ -292,6 +295,16 @@ def docker_argv(
         f"{config.repo_root}:{SRC_MOUNT}",
         "-v",
         f"{TOOL_ROOT}:{TOOLKIT_MOUNT}:ro",
+        # Persistent dependency caches in docker-managed named volumes: the
+        # copy-isolated workdir is fresh every run, so without these every
+        # build would re-download all of pub/cargo/go. Nothing touches the
+        # host filesystem.
+        "-v",
+        "cbuild-pub-cache:/root/.pub-cache",
+        "-v",
+        "cbuild-cargo-registry:/root/.cargo/registry",
+        "-v",
+        "cbuild-go-mod:/root/go/pkg/mod",
         "-w",
         workdir,
         "-e",
@@ -311,6 +324,7 @@ def docker_argv(
     # to run_argv).
     argv += ["-e", f"CBUILD_VERSION={stamp.version}"]
     argv += ["-e", f"CBUILD_BUILD_NUMBER={stamp.build_number}"]
+    argv += ["-e", "CBUILD_CONTAINER_BUILD=1"]
     for name in (*env_passthrough_names(config), *EXTRA_ENV_PASSTHROUGH):
         if os.environ.get(name):
             argv += ["-e", name]
@@ -724,9 +738,7 @@ def run_ssh_target(
     #    a relative '.' would resolve against the TOOLKIT's products/ dir.
     env_pairs = container_env_pairs(config, stamp)
     secrets = [
-        value
-        for name, value in env_pairs
-        if name not in ("CBUILD_VERSION", "CBUILD_BUILD_NUMBER")
+        value for name, value in env_pairs if not name.startswith("CBUILD_")
     ]
     sub_args = build_subcommand_args(config, targets, args, repo_root=remote_repo)
     remote = remote_command(shell, remote_repo, env_pairs, launcher, sub_args)

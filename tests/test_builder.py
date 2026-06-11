@@ -119,6 +119,37 @@ class TestRunTarget:
             )
 
 
+class TestNeutralizePathOverrides:
+    def test_writes_empty_override_file_beside_affected_pubspec(self, tmp_path):
+        (tmp_path / "pubspec.yaml").write_text(
+            "name: demo\ndependency_overrides:\n  forge:\n    path: ../forge\n"
+        )
+        written = builder.neutralize_path_overrides(tmp_path)
+        assert written == [tmp_path / "pubspec_overrides.yaml"]
+        content = (tmp_path / "pubspec_overrides.yaml").read_text()
+        # An empty block REPLACES the committed one (pub semantics).
+        assert content.rstrip().endswith("dependency_overrides:")
+
+    def test_pubspec_without_overrides_untouched(self, tmp_path):
+        (tmp_path / "pubspec.yaml").write_text("name: demo\ndependencies:\n  intl: ^0.20.0\n")
+        assert builder.neutralize_path_overrides(tmp_path) == []
+        assert not (tmp_path / "pubspec_overrides.yaml").exists()
+
+    def test_nested_app_pubspecs_covered_but_caches_skipped(self, tmp_path):
+        nested = tmp_path / "apps" / "studio"
+        nested.mkdir(parents=True)
+        (nested / "pubspec.yaml").write_text(
+            "name: studio\ndependency_overrides:\n  x:\n    path: ../x\n"
+        )
+        cache = tmp_path / "build" / "pkg"
+        cache.mkdir(parents=True)
+        (cache / "pubspec.yaml").write_text(
+            "name: cached\ndependency_overrides:\n  y:\n    path: ../y\n"
+        )
+        written = builder.neutralize_path_overrides(tmp_path)
+        assert written == [nested / "pubspec_overrides.yaml"]
+
+
 class TestCollectArtifacts:
     def test_existing_artifact_is_globbed(self, tmp_path):
         # Build a product whose repo_root is tmp_path and create a matching file.

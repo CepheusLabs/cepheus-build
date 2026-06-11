@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -67,6 +68,43 @@ def run_target(
 
     for command in host_list(target.get("post")):
         run_command(str(command), cwd, env, dry_run)
+
+
+def neutralize_path_overrides(repo_root: Path) -> list[Path]:
+    """Disarm committed sibling-path ``dependency_overrides`` for isolated builds.
+
+    Product repos may COMMIT a ``dependency_overrides:`` block pointing
+    first-party packages at sibling checkouts (``../forge``, ...) for the
+    local dev workflow. Those siblings do not exist inside a container/VM
+    work copy, so resolution would fail before the git pins in
+    ``dependencies:`` ever apply. pub's rule: a ``pubspec_overrides.yaml``
+    REPLACES the pubspec's override block wholesale -- so an EMPTY block
+    beside each affected pubspec makes the committed git pins authoritative.
+    Only called when ``CBUILD_CONTAINER_BUILD`` is set: the work copy is
+    disposable transport state, never a developer checkout.
+    """
+    written: list[Path] = []
+    for pubspec in sorted(repo_root.rglob("pubspec.yaml")):
+        parts = pubspec.relative_to(repo_root).parts
+        if any(part in (".dart_tool", "build", ".pub-cache", ".git") for part in parts):
+            continue
+        try:
+            content = pubspec.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not re.search(r"^dependency_overrides:", content, flags=re.MULTILINE):
+            continue
+        overrides_file = pubspec.parent / "pubspec_overrides.yaml"
+        overrides_file.write_text(
+            "# Written by cepheus-build for container/VM builds: an empty\n"
+            "# override block makes the committed git pins authoritative\n"
+            "# (sibling path overrides cannot resolve in an isolated copy).\n"
+            "dependency_overrides:\n",
+            encoding="utf-8",
+        )
+        written.append(overrides_file)
+        print(f"neutralized path overrides: {overrides_file.relative_to(repo_root)}")
+    return written
 
 
 def collect_artifacts(config: ProductConfig, target_names: list[str]) -> dict[str, list[Path]]:

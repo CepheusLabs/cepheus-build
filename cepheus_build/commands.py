@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Any
 from .builder import (
     collect_artifacts,
     copy_artifact,
+    neutralize_path_overrides,
     run_target,
     sync_repo_before_build,
 )
@@ -506,6 +508,11 @@ def cmd_build(args: argparse.Namespace) -> int:
         sync_repo_before_build(
             config.repo_root, require_clean=getattr(args, "require_clean", False)
         )
+    if os.environ.get("CBUILD_CONTAINER_BUILD") and not args.dry_run:
+        # Inside a container/VM work copy: committed sibling-path
+        # dependency_overrides cannot resolve there; neutralize them so the
+        # committed git pins apply (builder.neutralize_path_overrides).
+        neutralize_path_overrides(config.repo_root)
     stamp = compute_stamp(config)
     extra_env = buildroot_env(args)
     failures: list[tuple[str, str]] = []

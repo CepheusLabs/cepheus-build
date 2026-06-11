@@ -261,6 +261,14 @@ class TestDockerArgv:
         assert "/opt/cepheus-build:ro" in joined
         assert "img:latest" in argv
 
+    def test_named_cache_volumes(self, tmp_path):
+        config = _three_host_config(tmp_path)
+        argv = container.docker_argv(config, ["linux"], self._endpoint(), STAMP, _args())
+        joined = " ".join(argv)
+        assert "cbuild-pub-cache:/root/.pub-cache" in joined
+        assert "cbuild-cargo-registry:/root/.cargo/registry" in joined
+        assert "cbuild-go-mod:/root/go/pkg/mod" in joined
+
     def test_copy_isolation_contract_env(self, tmp_path):
         config = _three_host_config(tmp_path)
         argv = container.docker_argv(config, ["linux"], self._endpoint(), STAMP, _args())
