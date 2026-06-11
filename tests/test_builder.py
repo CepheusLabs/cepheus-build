@@ -135,6 +135,32 @@ class TestNeutralizePathOverrides:
         assert builder.neutralize_path_overrides(tmp_path) == []
         assert not (tmp_path / "pubspec_overrides.yaml").exists()
 
+    def test_app_git_pins_become_overrides(self, tmp_path):
+        (tmp_path / "pubspec.yaml").write_text(
+            "name: demo\n"
+            "dependencies:\n"
+            "  forge:\n"
+            "    git:\n"
+            "      url: https://github.com/CepheusLabs/forge.git\n"
+            "      ref: 748c5a1\n"
+            "  intl: ^0.20.0\n"
+            "dependency_overrides:\n"
+            "  forge:\n"
+            "    path: ../forge\n"
+            "  luxon:\n"
+            "    path: ../luxon/clients/flutter\n"
+        )
+        builder.neutralize_path_overrides(tmp_path)
+        content = (tmp_path / "pubspec_overrides.yaml").read_text()
+        # The app's own git pin is restated as an override: pub overrides
+        # bypass solving, so transitive pin lag cannot forbid the build.
+        assert "  forge:" in content
+        assert "ref: 748c5a1" in content
+        # luxon has no app-level pin -> resolved transitively, not overridden.
+        assert "luxon" not in content
+        assert "path:" not in content
+        assert "intl" not in content
+
     def test_nested_app_pubspecs_covered_but_caches_skipped(self, tmp_path):
         nested = tmp_path / "apps" / "studio"
         nested.mkdir(parents=True)

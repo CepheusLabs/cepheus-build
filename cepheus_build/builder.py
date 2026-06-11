@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import glob
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -70,6 +69,67 @@ def run_target(
         run_command(str(command), cwd, env, dry_run)
 
 
+_PUBSPEC_DEP_SECTIONS = ("dependencies", "dev_dependencies", "dependency_overrides")
+
+
+def _first_party_pin_overrides(content: str) -> tuple[bool, list[str]]:
+    """Build the neutralizing override entries for one pubspec.
+
+    Returns ``(has_committed_override_block, override_entry_lines)``. For
+    every package named in the committed ``dependency_overrides:`` block that
+    also carries a ``git:`` pin in the app's own ``dependencies`` /
+    ``dev_dependencies``, the pinned block is returned verbatim (two-space
+    indentation preserved). Re-stating the app's pins as OVERRIDES makes them
+    authoritative: pub's dependency_overrides bypass version solving, so
+    transitive first-party pin lag (a pinned client demanding an older forge
+    ref than the app pins) cannot fail the build -- the same semantics the
+    sibling-path overrides give the local dev workflow.
+    """
+    lines = content.splitlines()
+    section: str | None = None
+    overridden: list[str] = []
+    pinned: dict[str, list[str]] = {}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if stripped and not stripped.startswith("#") and indent == 0 and ":" in stripped:
+            section = stripped.split(":", 1)[0]
+            index += 1
+            continue
+        if (
+            section in _PUBSPEC_DEP_SECTIONS
+            and stripped
+            and not stripped.startswith("#")
+            and indent == 2
+        ):
+            name = stripped.split(":", 1)[0]
+            block = [line]
+            cursor = index + 1
+            while cursor < len(lines):
+                child = lines[cursor]
+                child_stripped = child.strip()
+                if child_stripped and not child_stripped.startswith("#"):
+                    if len(child) - len(child.lstrip()) <= 2:
+                        break
+                block.append(child)
+                cursor += 1
+            while block and not block[-1].strip():
+                block.pop()
+            if section == "dependency_overrides":
+                overridden.append(name)
+            elif any(item.strip().startswith("git:") for item in block):
+                pinned.setdefault(name, block)
+            index = cursor
+            continue
+        index += 1
+    entries = [
+        item for name in overridden if name in pinned for item in pinned[name]
+    ]
+    return (bool(overridden), entries)
+
+
 def neutralize_path_overrides(repo_root: Path) -> list[Path]:
     """Disarm committed sibling-path ``dependency_overrides`` for isolated builds.
 
@@ -78,10 +138,11 @@ def neutralize_path_overrides(repo_root: Path) -> list[Path]:
     local dev workflow. Those siblings do not exist inside a container/VM
     work copy, so resolution would fail before the git pins in
     ``dependencies:`` ever apply. pub's rule: a ``pubspec_overrides.yaml``
-    REPLACES the pubspec's override block wholesale -- so an EMPTY block
-    beside each affected pubspec makes the committed git pins authoritative.
-    Only called when ``CBUILD_CONTAINER_BUILD`` is set: the work copy is
-    disposable transport state, never a developer checkout.
+    REPLACES the pubspec's override block wholesale -- so each affected
+    pubspec gets one carrying the app's own git pins as overrides (see
+    :func:`_first_party_pin_overrides`), or an empty block when the app pins
+    nothing. Only called when ``CBUILD_CONTAINER_BUILD`` is set: the work
+    copy is disposable transport state, never a developer checkout.
     """
     written: list[Path] = []
     for pubspec in sorted(repo_root.rglob("pubspec.yaml")):
@@ -92,14 +153,17 @@ def neutralize_path_overrides(repo_root: Path) -> list[Path]:
             content = pubspec.read_text(encoding="utf-8")
         except OSError:
             continue
-        if not re.search(r"^dependency_overrides:", content, flags=re.MULTILINE):
+        has_block, entries = _first_party_pin_overrides(content)
+        if not has_block:
             continue
         overrides_file = pubspec.parent / "pubspec_overrides.yaml"
+        body = "\n".join(entries)
         overrides_file.write_text(
-            "# Written by cepheus-build for container/VM builds: an empty\n"
-            "# override block makes the committed git pins authoritative\n"
-            "# (sibling path overrides cannot resolve in an isolated copy).\n"
-            "dependency_overrides:\n",
+            "# Written by cepheus-build for container/VM builds: replaces the\n"
+            "# committed sibling-path overrides (unresolvable in an isolated\n"
+            "# copy) with the app's own git pins, which override transitive\n"
+            "# first-party pin lag.\n"
+            "dependency_overrides:\n" + (f"{body}\n" if body else ""),
             encoding="utf-8",
         )
         written.append(overrides_file)
