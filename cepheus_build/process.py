@@ -52,6 +52,11 @@ COMMAND_OUTPUT_FAILURE_PATTERNS = [
 # stdout (non-tty), so color stays off there and output stays byte-stable.
 _COLOR_FORCE_OFF = False
 
+# Serializes line writes when several streamed subprocesses share stdout (the
+# container backend's parallel per-host dispatch). Single-process streaming is
+# unaffected: the lock is uncontended.
+_PRINT_LOCK = threading.Lock()
+
 
 def set_color_enabled(enabled: bool | None = None, *, no_color: bool | None = None) -> None:
     """Globally turn ANSI color off.
@@ -139,7 +144,6 @@ def run_command(
     dry_run: bool = False,
     *,
     allow_repairs: bool = True,
-    expand_vars: bool = True,
 ) -> None:
     # TRUST BOUNDARY: ``command`` is a shell string sourced from a product's
     # TOML config (build/store/pre/post commands). Those product TOMLs are
@@ -147,12 +151,10 @@ def run_command(
     # ``shell=True`` (in run_shell_streaming) is intentional. Command strings
     # coming from an UNTRUSTED repo's ``.cepheus-build.toml`` / ``--config``
     # must NOT be passed here without review -- they run arbitrary code locally.
-    #
-    # ``expand_vars=False`` skips local ``$VAR`` interpolation. The container
-    # backend uses it so that ``$HOME`` / ``$env:USERPROFILE`` in an ssh remote
-    # command reach the *remote* shell intact instead of being expanded against
-    # the dispatch host's environment.
-    rendered = os.path.expandvars(command) if expand_vars else command
+    # (The container backend's transport commands use :func:`run_argv` instead:
+    # no shell, no ``$VAR`` expansion, so remote ``$HOME`` / ``$env:...`` tokens
+    # reach the remote shell intact.)
+    rendered = os.path.expandvars(command)
     print(f"{style_prefix('+')} {rendered}", flush=True)
     if dry_run:
         return
@@ -171,14 +173,55 @@ def run_command(
     raise subprocess.CalledProcessError(returncode or 1, rendered, output=output)
 
 
+def run_argv(
+    argv: list[str],
+    cwd: Path,
+    env: dict[str, str],
+    dry_run: bool = False,
+    *,
+    prefix: str = "",
+) -> None:
+    """Execute ``argv`` directly (no shell) and stream its output.
+
+    The argv-exec counterpart of :func:`run_command`, used by the container
+    backend for its own transport commands (docker / ssh / rsync). Bypassing
+    the local shell makes quoting OS-independent: every element reaches the
+    child process verbatim, so an ssh remote-command string stays one argument
+    even on native Windows, where :func:`shell_quote` cannot quote for cmd.exe.
+
+    No ``$VAR`` expansion, CocoaPods repair, or output-failure scanning happens
+    here -- those behaviors target product build commands, not transport.
+    ``prefix`` is prepended to the echoed command and every streamed line
+    (parallel per-host dispatch labels each host's output with it).
+    """
+    rendered = display_command(argv[0], argv[1:])
+    with _PRINT_LOCK:
+        print(f"{prefix}{style_prefix('+')} {rendered}", flush=True)
+    if dry_run:
+        return
+    returncode, output = _run_streaming(argv, cwd, env, shell=False, prefix=prefix)
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, rendered, output=output)
+
+
 def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[int, str]:
+    # TRUST BOUNDARY: ``command`` is executed through the shell and is expected
+    # to come from TRUSTED first-party product TOML, never from an untrusted
+    # repo's config supplied via ``--config``.
+    return _run_streaming(command, cwd, env, shell=True)
+
+
+def _run_streaming(
+    command: str | list[str],
+    cwd: Path,
+    env: dict[str, str],
+    *,
+    shell: bool,
+    prefix: str = "",
+) -> tuple[int, str]:
     # No timeout is applied here on purpose: real builds legitimately run for a
     # long time. Short auxiliary commands that can hang (tool probes, git, gh)
     # use bounded timeouts in their own modules instead.
-    #
-    # TRUST BOUNDARY: like :func:`run_command`, ``command`` is executed through
-    # the shell and is expected to come from TRUSTED first-party product TOML,
-    # never from an untrusted repo's config supplied via ``--config``.
     popen_kwargs: dict[str, Any] = {}
     if os.name != "nt":
         popen_kwargs["start_new_session"] = True
@@ -186,7 +229,7 @@ def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[i
         command,
         cwd=cwd,
         env=env,
-        shell=True,
+        shell=shell,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -201,7 +244,8 @@ def run_shell_streaming(command: str, cwd: Path, env: dict[str, str]) -> tuple[i
             for line in iter(pipe.readline, ""):
                 with output_lock:
                     output.append(line)
-                print(line, end="", file=destination, flush=True)
+                with _PRINT_LOCK:
+                    print(f"{prefix}{line}", end="", file=destination, flush=True)
         except ValueError:
             pass
         finally:

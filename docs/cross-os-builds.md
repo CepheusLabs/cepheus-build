@@ -100,10 +100,12 @@ docker path bind-mounts it; the ssh path rsyncs `build/` back after the build,
 so the normal `cepheus-build artifacts -p <product> <targets> --copy-to dist/`
 step works unchanged.
 
-> **Dispatch SSH targets from a POSIX shell.** rsync+ssh remote commands are
-> quoted for POSIX. Run Windows/macOS-VM dispatch from the Linux KVM host,
-> macOS, or WSL. From native Windows `cmd`, `--dry-run` preview is reliable but
-> live SSH dispatch is not (quoting differs).
+> **Dispatch works from any host shell.** Transport commands (docker / ssh /
+> rsync) are executed argv-style with no local shell in between, so the remote
+> command reaches `ssh` as a single argument — including from native Windows.
+> The dispatch host only needs `ssh` and `rsync` on `PATH` (`rsync` is not part
+> of Git for Windows: install it via MSYS2 `pacman -S rsync`, `choco install
+> rsync`, or dispatch from WSL). `cepheus-build doctor` checks both.
 
 ## Dependencies, stamping, and secrets
 

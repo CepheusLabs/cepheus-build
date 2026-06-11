@@ -50,7 +50,7 @@ from .config import (
 )
 from .errors import BuildError
 from .github import preferred_host_for_target
-from .process import display_command, run_command, style_prefix
+from .process import run_argv, style_prefix
 
 # The host-relative subtree that holds every build output. One rsync of this
 # directory brings all of a host's target artifacts back from an SSH VM.
@@ -286,11 +286,20 @@ def _default_launcher(host_os: str, endpoint: dict[str, Any]) -> str:
     return f"{toolkit}/bin/cepheus-build"
 
 
+# The only remote shells this backend can synthesize commands for. Fail closed
+# on anything else: a typo'd ``shell = "powershel"`` silently quoted as POSIX
+# would produce a subtly broken remote command instead of a clear error.
+VALID_REMOTE_SHELLS = ("posix", "powershell")
+
+
 def _remote_shell(host_os: str, endpoint: dict[str, Any]) -> str:
-    shell = endpoint.get("shell")
-    if shell:
-        return str(shell)
-    return "powershell" if host_os == "windows" else "posix"
+    shell = str(endpoint.get("shell") or ("powershell" if host_os == "windows" else "posix"))
+    if shell not in VALID_REMOTE_SHELLS:
+        raise BuildError(
+            f"Unknown remote shell '{shell}' (expected one of: "
+            f"{', '.join(VALID_REMOTE_SHELLS)})."
+        )
+    return shell
 
 
 def remote_command(
@@ -318,12 +327,37 @@ def remote_command(
         invocation += [_ps_quote(arg) for arg in build_args]
         parts.append(" ".join(invocation))
         return "; ".join(parts)
+    if shell != "posix":
+        raise BuildError(
+            f"Unknown remote shell '{shell}' (expected one of: "
+            f"{', '.join(VALID_REMOTE_SHELLS)})."
+        )
 
     assignments = " ".join(f"{name}={shlex.quote(value)}" for name, value in env_pairs)
     launcher_part = " ".join(_posix_path(tok) for tok in launcher_tokens)
     args_part = " ".join(shlex.quote(arg) for arg in build_args)
     prefix = f"{assignments} " if assignments else ""
     return f"cd {_posix_path(remote_repo)} && {prefix}{launcher_part} {args_part}"
+
+
+def remote_mkdir_command(shell: str, remote_repo: str) -> str:
+    """Command that creates ``remote_repo`` (and parents) on the VM, idempotently.
+
+    rsync does not ``mkdir -p`` its destination, so the very first push to a
+    fresh VM would fail without this. ``--mkpath`` is not used because the
+    macOS VM may carry the ancient stock rsync.
+    """
+    if shell == "powershell":
+        return (
+            f"New-Item -ItemType Directory -Force -Path {_ps_path(remote_repo)} "
+            "| Out-Null"
+        )
+    if shell != "posix":
+        raise BuildError(
+            f"Unknown remote shell '{shell}' (expected one of: "
+            f"{', '.join(VALID_REMOTE_SHELLS)})."
+        )
+    return f"mkdir -p {_posix_path(remote_repo)}"
 
 
 def _posix_path(value: str) -> str:
@@ -352,29 +386,53 @@ def _ps_path(value: str) -> str:
     return _ps_quote(value)
 
 
-def _as_posix_dir(repo_root: Path) -> str:
-    """``repo_root`` as a forward-slash path with no trailing separator.
+def _rsync_remote_path(remote_repo: str) -> str:
+    """``remote_repo`` as an rsync remote path: relative to the remote home.
 
-    rsync wants POSIX-style sources even on Windows (it runs under Git-Bash/MSYS);
-    a trailing slash on the source means "copy the contents into the destination".
+    rsync resolves a relative remote path against the remote user's home
+    directory, so a leading ``~/`` is dropped rather than relied on for shell
+    expansion. Absolute paths pass through unchanged.
     """
-    return repo_root.as_posix().rstrip("/")
+    if remote_repo == "~":
+        return "."
+    if remote_repo.startswith("~/"):
+        return remote_repo[2:]
+    return remote_repo
 
 
-def rsync_push_argv(repo_root: Path, destination: str, port_opts: list[str]) -> list[str]:
+def rsync_push_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
+    """rsync argv pushing the repo to ``remote_spec`` (``user@host:path``).
+
+    The source is the literal ``./``: the caller runs rsync with
+    ``cwd=repo_root``. A cwd-relative source keeps Windows drive-letter paths
+    (``D:/...``) out of the argv, where rsync would parse the colon as a
+    host separator.
+    """
     ssh_cmd = " ".join(["ssh", *port_opts])
     argv = ["rsync", "-az", "--delete", "-e", ssh_cmd]
     for pattern in RSYNC_EXCLUDES:
         argv += ["--exclude", pattern]
     # Trailing slash on the source copies the contents into the destination dir.
-    argv += [f"{_as_posix_dir(repo_root)}/", f"{destination}/"]
+    argv += ["./", f"{remote_spec}/"]
     return argv
 
 
-def rsync_pull_argv(source: str, repo_root: Path, port_opts: list[str]) -> list[str]:
+def rsync_pull_argv(remote_spec: str, port_opts: list[str]) -> list[str]:
+    """rsync argv pulling the artifact tree back into ``cwd`` (= repo_root).
+
+    ``--relative`` with the ``/./`` anchor recreates the artifact path under
+    the local repo, creating implied directories as needed.
+    """
     ssh_cmd = " ".join(["ssh", *port_opts])
-    local = f"{_as_posix_dir(repo_root)}/{ARTIFACT_DIR}/"
-    return ["rsync", "-az", "-e", ssh_cmd, f"{source}/{ARTIFACT_DIR}/", local]
+    return [
+        "rsync",
+        "-az",
+        "--relative",
+        "-e",
+        ssh_cmd,
+        f"{remote_spec}/./{ARTIFACT_DIR}",
+        ".",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -420,6 +478,8 @@ def run_docker_target(
     endpoint: dict[str, Any],
     stamp: Stamp,
     args: argparse.Namespace,
+    *,
+    prefix: str = "",
 ) -> None:
     _warn_local_overrides(config.repo_root)
     argv = docker_argv(
@@ -430,14 +490,7 @@ def run_docker_target(
         args,
         docker_host=getattr(args, "container_host", None),
     )
-    command = display_command(argv[0], argv[1:])
-    run_command(
-        command,
-        TOOL_ROOT,
-        dict(os.environ),
-        getattr(args, "dry_run", False),
-        expand_vars=False,
-    )
+    run_argv(argv, TOOL_ROOT, dict(os.environ), getattr(args, "dry_run", False), prefix=prefix)
 
 
 def run_ssh_target(
@@ -447,31 +500,41 @@ def run_ssh_target(
     endpoint: dict[str, Any],
     stamp: Stamp,
     args: argparse.Namespace,
+    *,
+    prefix: str = "",
 ) -> None:
     dry_run = getattr(args, "dry_run", False)
     destination, port_opts = _ssh_base(
         endpoint, host_override=getattr(args, "container_host", None)
     )
     remote_repo = _remote_repo(endpoint, config.slug)
+    remote_spec = f"{destination}:{_rsync_remote_path(remote_repo)}"
     launcher = _default_launcher(host_os, endpoint)
     shell = _remote_shell(host_os, endpoint)
     env = dict(os.environ)
 
-    # 1. Push a clean copy of the repo (committed-pins; overrides excluded).
-    push = rsync_push_argv(config.repo_root, f"{destination}:{remote_repo}", port_opts)
-    run_command(display_command(push[0], push[1:]), TOOL_ROOT, env, dry_run, expand_vars=False)
+    # 0. Make sure the remote repo dir exists: rsync does not mkdir -p its
+    #    destination, so the first push to a fresh VM would otherwise fail.
+    mkdir = remote_mkdir_command(shell, remote_repo)
+    run_argv(["ssh", *port_opts, destination, mkdir], TOOL_ROOT, env, dry_run, prefix=prefix)
 
-    # 2. Run the build inside the VM.
+    # 1. Push a clean copy of the repo (committed-pins; overrides excluded).
+    #    cwd=repo_root: the rsync source is the literal ``./`` (see
+    #    rsync_push_argv on why drive-letter paths must stay out of the argv).
+    push = rsync_push_argv(remote_spec, port_opts)
+    run_argv(push, config.repo_root, env, dry_run, prefix=prefix)
+
+    # 2. Run the build inside the VM. The remote command is ONE argv element,
+    #    so no local shell ever re-parses it (reliable from native Windows too).
     sub_args = build_subcommand_args(config, targets, args, repo_root=".")
     remote = remote_command(
         shell, remote_repo, container_env_pairs(config, stamp), launcher, sub_args
     )
-    ssh_args = [*port_opts, destination, remote]
-    run_command(display_command("ssh", ssh_args), TOOL_ROOT, env, dry_run, expand_vars=False)
+    run_argv(["ssh", *port_opts, destination, remote], TOOL_ROOT, env, dry_run, prefix=prefix)
 
     # 3. Pull the build outputs back so `artifacts` finds them on the host.
-    pull = rsync_pull_argv(f"{destination}:{remote_repo}", config.repo_root, port_opts)
-    run_command(display_command(pull[0], pull[1:]), TOOL_ROOT, env, dry_run, expand_vars=False)
+    pull = rsync_pull_argv(remote_spec, port_opts)
+    run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
 
 
 def cmd_container_build(config: ProductConfig, args: argparse.Namespace) -> int:

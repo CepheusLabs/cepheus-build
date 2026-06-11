@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
 from cepheus_build.process import (
     COCOAPODS_SPECS_REPAIR_PATTERNS,
     COMMAND_OUTPUT_FAILURE_PATTERNS,
     display_command,
+    run_argv,
     set_color_enabled,
     shell_quote,
     should_repair_cocoapods_specs,
@@ -13,6 +21,71 @@ from cepheus_build.process import (
     style_prefix,
     use_color,
 )
+
+# ---------------------------------------------------------------------------
+# run_argv()
+# ---------------------------------------------------------------------------
+
+class TestRunArgv:
+    """Real subprocesses via the Python interpreter: portable on every host OS."""
+
+    def _env(self):
+        return dict(os.environ)
+
+    def test_success_streams_output(self, capfd):
+        run_argv(
+            [sys.executable, "-c", "print('argv-exec ok')"],
+            Path.cwd(),
+            self._env(),
+        )
+        out, _err = capfd.readouterr()
+        assert "argv-exec ok" in out
+
+    def test_argument_with_spaces_survives_verbatim(self, capfd):
+        # The whole point of argv-exec: one argv element arrives as ONE
+        # sys.argv entry, with no local shell re-parsing it (the failure mode
+        # of shell-string dispatch on native Windows, where shell_quote is a
+        # no-op).
+        marker = "cd '/x y'; $env:A = 'b c'"
+        run_argv(
+            [sys.executable, "-c", "import sys; print(sys.argv[1])", marker],
+            Path.cwd(),
+            self._env(),
+        )
+        out, _err = capfd.readouterr()
+        assert marker in out
+
+    def test_nonzero_exit_raises(self):
+        with pytest.raises(subprocess.CalledProcessError):
+            run_argv(
+                [sys.executable, "-c", "raise SystemExit(3)"],
+                Path.cwd(),
+                self._env(),
+            )
+
+    def test_dry_run_echoes_without_executing(self, capfd, tmp_path):
+        witness = tmp_path / "ran"
+        run_argv(
+            [sys.executable, "-c", f"open({str(witness)!r}, 'w').close()"],
+            Path.cwd(),
+            self._env(),
+            dry_run=True,
+        )
+        out, _err = capfd.readouterr()
+        assert "+ " in out
+        assert not witness.exists()
+
+    def test_prefix_applied_to_echo_and_stream(self, capfd):
+        run_argv(
+            [sys.executable, "-c", "print('payload')"],
+            Path.cwd(),
+            self._env(),
+            prefix="[macos] ",
+        )
+        out, _err = capfd.readouterr()
+        lines = out.splitlines()
+        assert any(line.startswith("[macos] +") for line in lines)
+        assert "[macos] payload" in lines
 
 # ---------------------------------------------------------------------------
 # should_treat_output_as_failure()

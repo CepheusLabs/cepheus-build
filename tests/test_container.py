@@ -308,8 +308,8 @@ class TestRemoteCommand:
 
 
 class TestRsyncArgv:
-    def test_push_excludes_overrides(self, tmp_path):
-        argv = container.rsync_push_argv(tmp_path, "u@h:~/cbuild/demo", ["-p", "2222"])
+    def test_push_excludes_overrides(self):
+        argv = container.rsync_push_argv("u@h:cbuild/demo", ["-p", "2222"])
         joined = " ".join(argv)
         assert "--delete" in argv
         assert "pubspec_overrides.yaml" in joined
@@ -317,16 +317,19 @@ class TestRsyncArgv:
         assert "build/" in joined
         assert "-e" in argv and "ssh -p 2222" in joined
 
-    def test_push_source_is_posix_with_trailing_slash(self, tmp_path):
-        argv = container.rsync_push_argv(tmp_path, "u@h:~/cbuild/demo", [])
-        source = argv[-2]
-        assert source.endswith("/")
-        assert "\\" not in source  # forward-slash even on Windows
+    def test_push_source_is_cwd_relative(self):
+        # The caller runs rsync with cwd=repo_root: a ``./`` source keeps
+        # Windows drive-letter paths (D:/...) out of the argv, where rsync
+        # would parse the colon as a host separator.
+        argv = container.rsync_push_argv("u@h:cbuild/demo", [])
+        assert argv[-2] == "./"
+        assert argv[-1] == "u@h:cbuild/demo/"
 
-    def test_pull_targets_build_dir(self, tmp_path):
-        argv = container.rsync_pull_argv("u@h:~/cbuild/demo", tmp_path, [])
-        assert argv[-2] == "u@h:~/cbuild/demo/build/"
-        assert argv[-1].endswith("/build/")
+    def test_pull_is_relative_with_anchor(self):
+        argv = container.rsync_pull_argv("u@h:cbuild/demo", [])
+        assert "--relative" in argv
+        assert argv[-2] == "u@h:cbuild/demo/./build"
+        assert argv[-1] == "."
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +351,45 @@ class TestPathHelpers:
     def test_ps_absolute_is_single_quoted(self):
         assert container._ps_path("C:/x") == "'C:/x'"
 
+    def test_rsync_remote_path_strips_tilde(self):
+        assert container._rsync_remote_path("~/cbuild/demo") == "cbuild/demo"
+        assert container._rsync_remote_path("~") == "."
+        assert container._rsync_remote_path("/srv/cbuild") == "/srv/cbuild"
+
+
+# ---------------------------------------------------------------------------
+# remote mkdir + shell validation
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteMkdir:
+    def test_posix_mkdir_p(self):
+        cmd = container.remote_mkdir_command("posix", "~/cbuild/demo")
+        assert cmd == 'mkdir -p "$HOME"/cbuild/demo'
+
+    def test_powershell_new_item(self):
+        cmd = container.remote_mkdir_command("powershell", "~/cbuild/demo")
+        assert "New-Item -ItemType Directory -Force" in cmd
+        assert "$env:USERPROFILE/cbuild/demo" in cmd
+
+    def test_unknown_shell_raises(self):
+        with pytest.raises(BuildError):
+            container.remote_mkdir_command("powershel", "~/cbuild/demo")
+
+
+class TestRemoteShellValidation:
+    def test_remote_command_rejects_unknown_shell(self):
+        with pytest.raises(BuildError):
+            container.remote_command("bash", "/repo", [], "cli", ["build"])
+
+    def test_endpoint_shell_validated(self):
+        with pytest.raises(BuildError):
+            container._remote_shell("windows", {"shell": "cmd"})
+
+    def test_endpoint_shell_defaults_by_os(self):
+        assert container._remote_shell("windows", {}) == "powershell"
+        assert container._remote_shell("macos", {}) == "posix"
+
 
 # ---------------------------------------------------------------------------
 # cmd_container_build dispatch (run_command recorded)
@@ -356,12 +398,13 @@ class TestPathHelpers:
 
 @pytest.fixture
 def recorded(monkeypatch):
-    calls: list[str] = []
+    """Record every run_argv dispatch as (argv, cwd)."""
+    calls: list[tuple[list[str], object]] = []
 
-    def fake_run_command(command, cwd, env, dry_run=False, **kwargs):
-        calls.append(command)
+    def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix=""):
+        calls.append((list(argv), cwd))
 
-    monkeypatch.setattr(container, "run_command", fake_run_command)
+    monkeypatch.setattr(container, "run_argv", fake_run_argv)
     return calls
 
 
@@ -371,17 +414,28 @@ class TestCmdContainerBuild:
         rc = container.cmd_container_build(config, _args(targets=["linux"]))
         assert rc == 0
         assert len(recorded) == 1
-        assert recorded[0].startswith("docker run --rm")
+        assert recorded[0][0][:3] == ["docker", "run", "--rm"]
 
-    def test_ssh_host_does_push_build_pull(self, tmp_path, recorded):
+    def test_ssh_host_does_mkdir_push_build_pull(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
         rc = container.cmd_container_build(config, _args(targets=["macos"]))
         assert rc == 0
-        # rsync push, ssh build, rsync pull
-        assert len(recorded) == 3
-        assert recorded[0].startswith("rsync")
-        assert recorded[1].startswith("ssh")
-        assert recorded[2].startswith("rsync")
+        programs = [argv[0] for argv, _cwd in recorded]
+        assert programs == ["ssh", "rsync", "ssh", "rsync"]
+        mkdir_argv = recorded[0][0]
+        assert "mkdir -p" in mkdir_argv[-1]
+        # The remote build command travels as ONE argv element (no local shell
+        # re-parses it -- reliable from native Windows too).
+        build_argv = recorded[2][0]
+        assert build_argv[-1].startswith("cd ")
+        assert "--execution-mode local" in build_argv[-1]
+
+    def test_rsync_runs_in_repo_root(self, tmp_path, recorded):
+        config = _three_host_config(tmp_path)
+        rc = container.cmd_container_build(config, _args(targets=["macos"]))
+        assert rc == 0
+        rsync_cwds = [cwd for argv, cwd in recorded if argv[0] == "rsync"]
+        assert rsync_cwds == [config.repo_root, config.repo_root]
 
     def test_mixed_targets_group_per_host(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
@@ -389,10 +443,11 @@ class TestCmdContainerBuild:
             config, _args(targets=["linux", "macos", "windows"])
         )
         assert rc == 0
-        # 1 docker (linux) + 3 ssh-steps (macos) + 3 ssh-steps (windows)
-        assert sum(c.startswith("docker") for c in recorded) == 1
-        assert sum(c.startswith("rsync") for c in recorded) == 4
-        assert sum(c.startswith("ssh") for c in recorded) == 2
+        programs = [argv[0] for argv, _cwd in recorded]
+        # 1 docker (linux) + 4 ssh-steps (macos) + 4 ssh-steps (windows)
+        assert programs.count("docker") == 1
+        assert programs.count("rsync") == 4
+        assert programs.count("ssh") == 4
 
     def test_unknown_profile_raises(self, tmp_path, recorded):
         config = _three_host_config(tmp_path)
