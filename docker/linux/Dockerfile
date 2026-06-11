@@ -11,7 +11,9 @@ FROM ubuntu:24.04
 
 ARG GO_VERSION=1.26.4
 ARG RUST_VERSION=1.95.0
-ARG FLUTTER_VERSION=3.32.0
+# Tracks the dev machines (3.41.x stable): product Makefiles use flags that
+# do not exist in older SDKs (e.g. `flutter build web --no-wasm-dry-run`).
+ARG FLUTTER_VERSION=3.41.7
 ARG ANDROID_SDK_TOOLS=11076708
 ARG ANDROID_PLATFORM=android-35
 ARG ANDROID_BUILD_TOOLS=35.0.0
