@@ -27,6 +27,7 @@ from .container import container_profile_names
 from .errors import BuildError
 from .github import runner_profile_names
 from .process import augment_process_path, set_color_enabled
+from .vm import cmd_vm
 
 
 def add_product_args(parser: argparse.ArgumentParser) -> None:
@@ -310,6 +311,49 @@ def build_parser() -> argparse.ArgumentParser:
     add_local_build_args(local_sweep)
     add_container_build_args(local_sweep)
     local_sweep.set_defaults(func=cmd_local_sweep)
+
+    profiles = container_profile_names()
+    vm = sub.add_parser(
+        "vm",
+        help="Manage the cross-OS build VM pool (docker compose + dockur VMs).",
+    )
+    vm.add_argument(
+        "vm_action",
+        choices=["up", "down", "status"],
+        help="up: start the pool (and wait for SSH); down: power the VMs off; "
+        "status: compose ps + an SSH probe per VM.",
+    )
+    vm.add_argument(
+        "services",
+        nargs="*",
+        help="Compose services to act on (default: every ssh endpoint in the profile).",
+    )
+    vm.add_argument(
+        "--container-profile",
+        choices=profiles or None,
+        default=profiles[0] if profiles else "default",
+        help="Container/VM profile from build.toml [container_profiles.*].",
+    )
+    vm.add_argument(
+        "--wait",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="After up: poll each VM's SSH endpoint until it accepts a connection.",
+    )
+    vm.add_argument(
+        "--wait-timeout",
+        dest="wait_timeout",
+        type=int,
+        default=1200,
+        help="Seconds to wait for SSH readiness before failing (default 1200).",
+    )
+    vm.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print the compose command without running it (skips probes).",
+    )
+    vm.set_defaults(func=cmd_vm)
 
     return parser
 

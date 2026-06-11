@@ -74,8 +74,14 @@ the host/endpoint of every entry (handy for a one-off remote engine).
 
 1. **Build the Linux image** and make it pullable (or build it on each dispatch
    host): `docker compose --profile build-image build linux`.
-2. **Stand up the VM pool** on the KVM host: `cd docker && docker compose up -d
-   windows macos`, then provision each VM (see [../docker/README.md](../docker/README.md)).
+2. **Stand up the VM pool**: `cepheus-build vm up --wait`. It runs
+   `docker compose up -d` on the KVM host configured under
+   `[container_profiles.<name>.compose]` (over ssh; or locally when no
+   `compose.host` is set), then polls each VM's SSH endpoint until it accepts
+   a connection. First boot installs the OS — watch the noVNC viewers and
+   provision each VM once (see [../docker/README.md](../docker/README.md)).
+   `cepheus-build vm status` shows compose state + SSH reachability;
+   `cepheus-build vm down` powers the VMs off (compose stop, disks persist).
 3. **Point the profile** at the VMs (`host`/`port`), add your SSH public key to
    each VM, and clone `cepheus-build` to the `toolkit` path inside each VM.
 

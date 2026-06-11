@@ -26,7 +26,18 @@ Push it to a registry the dispatch hosts can pull, or build it locally on each
 dispatch host. The image name must match
 `build.toml [container_profiles.default.linux].image`.
 
-## 2. Start the VM pool (remote Linux KVM host only)
+## 2. Start the VM pool
+
+From any dispatch host (uses `[container_profiles.<name>.compose]` to reach
+the KVM host over ssh):
+
+```bash
+cepheus-build vm up --wait     # compose up -d + poll SSH endpoints
+cepheus-build vm status        # compose ps + one SSH probe per VM
+cepheus-build vm down          # power off (compose stop; VM disks persist)
+```
+
+Or manually on the KVM host itself:
 
 ```bash
 test -e /dev/kvm || echo "NO KVM — dockur VMs cannot boot here"

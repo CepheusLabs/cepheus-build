@@ -28,6 +28,15 @@ linux = { kind = "docker", image = "ghcr.io/cepheuslabs/cepheus-build-linux:late
 windows = { kind = "ssh", host = "192.168.0.98", port = 2322, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "powershell" }
 macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "posix" }
 
+# Where the VM pool's docker daemon lives (the bare-metal KVM host). `vm up/
+# down/status` ssh there and run docker compose inside `dir` -- the docker/
+# directory of a cepheus-build checkout on that host. Drop `host` (or the
+# whole table) to run compose locally when you are ON the KVM host.
+[container_profiles.default.compose]
+host = "192.168.0.98"
+user = "errai"
+dir = "~/cepheus-build/docker"
+
 [tools.appimagetool]
 hint = "install appimagetool from the AppImageKit releases"
 

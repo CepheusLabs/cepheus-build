@@ -38,6 +38,10 @@ Run via `./bin/cepheus-build` (a thin `sys.path` shim into `cepheus_build.cli:ma
 ./bin/cepheus-build build -p <product> <targets>            # Execute local build
 ./bin/cepheus-build build -p <product> <targets> --install-missing-deps   # Install tools first
 ./bin/cepheus-build build -p <product> <targets> --execution-mode github  # Dispatch CI instead
+./bin/cepheus-build build -p <product> <targets> --execution-mode container  # Build each target in a container/VM of its OS
+./bin/cepheus-build vm up --wait                            # Start the dockur VM pool + wait for SSH readiness
+./bin/cepheus-build vm status                               # compose ps + one SSH probe per VM
+./bin/cepheus-build vm down                                 # Power the VMs off (compose stop; disks persist)
 ./bin/cepheus-build build -p <product> <targets> --no-sync               # Skip pre-build repo sync
 ./bin/cepheus-build build -p <product> <targets> --require-clean         # Abort if uncommitted changes
 ./bin/cepheus-build artifacts -p <product> <targets> --copy-to dist/      # Collect outputs
