@@ -544,13 +544,16 @@ class TestRemotePrepare:
         cmd = container.remote_prepare_command("posix", "~/cbuild/demo", [])
         assert cmd == 'mkdir -p "$HOME"/cbuild/demo'
 
-    def test_powershell_new_item_and_remove(self):
+    def test_powershell_new_item_and_guarded_remove(self):
         cmd = container.remote_prepare_command(
             "powershell", "~/cbuild/demo", ["packaging/windows/dist"]
         )
         assert "New-Item -ItemType Directory -Force" in cmd
         assert "$env:USERPROFILE/cbuild/demo" in cmd
-        assert "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue" in cmd
+        # Missing roots are the normal first-run case: the Remove-Item must be
+        # Test-Path-guarded or powershell -Command exits 1 on a clean VM.
+        assert "if (Test-Path -LiteralPath" in cmd
+        assert "{ Remove-Item -Recurse -Force -LiteralPath" in cmd
         assert "$env:USERPROFILE/cbuild/demo/packaging/windows/dist" in cmd
 
     def test_unknown_shell_raises(self):

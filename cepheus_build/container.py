@@ -410,15 +410,21 @@ def remote_prepare_command(shell: str, remote_repo: str, roots: list[str]) -> st
     satisfy the host-side artifact globs).
     """
     if shell == "powershell":
+        # Each Remove-Item is guarded by Test-Path: a missing root is the
+        # normal first-run case and must not poison the exit code
+        # (powershell -Command exits 1 when the LAST statement's $? is false,
+        # even under -ErrorAction SilentlyContinue), while a real deletion
+        # failure on an existing root stays loud.
         parts = [
             f"New-Item -ItemType Directory -Force -Path {_ps_path(remote_repo)} "
             "| Out-Null"
         ]
-        parts += [
-            "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "
-            f"-LiteralPath {_ps_path(f'{remote_repo}/{root}')}"
-            for root in roots
-        ]
+        for root in roots:
+            target = _ps_path(f"{remote_repo}/{root}")
+            parts.append(
+                f"if (Test-Path -LiteralPath {target}) "
+                f"{{ Remove-Item -Recurse -Force -LiteralPath {target} }}"
+            )
         return "; ".join(parts)
     if shell != "posix":
         raise BuildError(
