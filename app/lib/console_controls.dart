@@ -47,6 +47,11 @@ extension _ConsoleControls on _BuildConsoleHomeState {
                   label: 'GitHub',
                   icon: ClIcons.cloud,
                 ),
+                ClSegmentOption(
+                  value: ExecutionMode.container,
+                  label: 'Container',
+                  icon: ClIcons.cube,
+                ),
               ],
               onChanged: _isRunning
                   ? null
@@ -90,6 +95,38 @@ extension _ConsoleControls on _BuildConsoleHomeState {
                       _setTargets(value);
                     },
             ),
+            if (_isContainerMode) ...[
+              const SizedBox(height: 14),
+              _fieldLabel('Container profile'),
+              DropdownButtonFormField<String>(
+                key: ValueKey('container-${_settings.containerProfile}'),
+                initialValue: _settings.containerProfile,
+                isExpanded: true,
+                items: [
+                  for (final profile in _availableContainerProfiles)
+                    DropdownMenuItem(
+                      value: profile.value,
+                      child: Text(profile.label),
+                    ),
+                ],
+                onChanged: _isRunning
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        _setContainerProfile(value);
+                      },
+              ),
+              const SizedBox(height: 4),
+              ClBanner(
+                kind: ClBannerKind.info,
+                title: 'Container / VM builds',
+                body:
+                    'Each target builds in a container or VM of its OS. '
+                    'Linux/Android/Web run in a local Docker image; Windows and '
+                    'macOS run in dockur KVM VMs reached over SSH.',
+                detail: 'Endpoints come from [container_profiles.*] in build.toml.',
+              ),
+            ],
             if (_isGitHubMode) ...[
               const SizedBox(height: 14),
               _fieldLabel('Runner profile'),

@@ -90,6 +90,18 @@ Cepheus Build supports the same product configs in three places:
   `github-hosted` runner profile from `build.toml`.
 - Self-hosted GitHub runners: use the reusable workflow with the `self-hosted`
   runner profile from `build.toml`; those labels are org-level by default.
+- Container / VM builds: `build ... --execution-mode container` routes each
+  target into a container or VM of its OS and re-invokes `cepheus-build` there,
+  so you can build for **all OS from any host**. Linux/Android/Web build in a
+  local Docker image (no KVM); Windows and macOS build in dockur KVM VMs on a
+  remote Linux host, reached over SSH. See
+  [docs/cross-os-builds.md](docs/cross-os-builds.md) and
+  [docker/](docker/). Profiles live under `[container_profiles.*]` in `build.toml`.
+
+```bash
+# Preview the docker/rsync/ssh commands for every target without running them:
+./bin/cepheus-build build -p printdeck-app all --execution-mode container --dry-run
+```
 
 You can inspect the generated CI matrix without running a build:
 

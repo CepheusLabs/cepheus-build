@@ -139,6 +139,7 @@ def run_command(
     dry_run: bool = False,
     *,
     allow_repairs: bool = True,
+    expand_vars: bool = True,
 ) -> None:
     # TRUST BOUNDARY: ``command`` is a shell string sourced from a product's
     # TOML config (build/store/pre/post commands). Those product TOMLs are
@@ -146,7 +147,12 @@ def run_command(
     # ``shell=True`` (in run_shell_streaming) is intentional. Command strings
     # coming from an UNTRUSTED repo's ``.cepheus-build.toml`` / ``--config``
     # must NOT be passed here without review -- they run arbitrary code locally.
-    rendered = os.path.expandvars(command)
+    #
+    # ``expand_vars=False`` skips local ``$VAR`` interpolation. The container
+    # backend uses it so that ``$HOME`` / ``$env:USERPROFILE`` in an ssh remote
+    # command reach the *remote* shell intact instead of being expanded against
+    # the dispatch host's environment.
+    rendered = os.path.expandvars(command) if expand_vars else command
     print(f"{style_prefix('+')} {rendered}", flush=True)
     if dry_run:
         return

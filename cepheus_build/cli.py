@@ -23,6 +23,7 @@ from .commands import (
     cmd_stamp,
     cmd_validate,
 )
+from .container import container_profile_names
 from .errors import BuildError
 from .github import runner_profile_names
 from .process import augment_process_path, set_color_enabled
@@ -114,6 +115,21 @@ def add_github_build_args(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Install Buildroot dependencies in GitHub workflows when the matrix requires them.",
+    )
+
+
+def add_container_build_args(parser: argparse.ArgumentParser) -> None:
+    profiles = container_profile_names()
+    parser.add_argument(
+        "--container-profile",
+        choices=profiles or None,
+        default=profiles[0] if profiles else "default",
+        help="Container/VM profile from build.toml [container_profiles.*].",
+    )
+    parser.add_argument(
+        "--container-host",
+        default="",
+        help="Override the docker/ssh host for every endpoint in the profile.",
     )
 
 
@@ -233,12 +249,13 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("targets", nargs="*", help="Targets or groups. Defaults to desktop.")
     build.add_argument(
         "--execution-mode",
-        choices=["local", "github"],
+        choices=["local", "github", "container"],
         default="local",
-        help="Run locally or dispatch the configured GitHub workflow.",
+        help="Run locally, dispatch the GitHub workflow, or route each target into a container/VM of its OS.",
     )
     add_local_build_args(build)
     add_github_build_args(build)
+    add_container_build_args(build)
     build.set_defaults(func=cmd_build)
 
     artifacts = sub.add_parser("artifacts", help="List expected artifacts for targets.")
@@ -276,7 +293,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Targets or groups for each product. Defaults to desktop.",
     )
     local_sweep.add_argument("--exclude", action="append", help="Product to skip. Repeat as needed.")
+    local_sweep.add_argument(
+        "--execution-mode",
+        choices=["local", "container"],
+        default="local",
+        help="Run each product on this host, or route its targets into a container/VM of their OS.",
+    )
     add_local_build_args(local_sweep)
+    add_container_build_args(local_sweep)
     local_sweep.set_defaults(func=cmd_local_sweep)
 
     return parser

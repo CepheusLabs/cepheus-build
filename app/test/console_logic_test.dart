@@ -8,6 +8,7 @@ BuildSettings _settings({
   String targets = 'all',
   ExecutionMode executionMode = ExecutionMode.local,
   String runnerProfile = 'github-hosted',
+  String containerProfile = 'default',
   String buildMode = 'release',
   String repoRoot = '',
   String githubRepo = '',
@@ -24,6 +25,7 @@ BuildSettings _settings({
     targets: targets,
     executionMode: executionMode,
     runnerProfile: runnerProfile,
+    containerProfile: containerProfile,
     buildMode: buildMode,
     repoRoot: repoRoot,
     githubRepo: githubRepo,
@@ -217,6 +219,37 @@ void main() {
         dryRun: false,
       );
       expect(args.where((a) => a.contains('buildroot')), isEmpty);
+    });
+
+    test('container mode passes container-profile and mode', () {
+      final args = buildModeArgs(
+        _settings(
+          executionMode: ExecutionMode.container,
+          containerProfile: 'default',
+          buildMode: 'release',
+        ),
+        dryRun: false,
+      );
+      expect(args, containsAllInOrder(['--execution-mode', 'container']));
+      expect(args, containsAllInOrder(['--container-profile', 'default']));
+      expect(args, containsAllInOrder(['--mode', 'release']));
+      // The container/VM is pre-provisioned: never install deps on the dispatch host.
+      expect(args, isNot(contains('--install-missing-deps')));
+      // No GitHub-only flags leak in.
+      expect(args, isNot(contains('--runner-profile')));
+    });
+
+    test('container mode threads keep-going toggle', () {
+      final keep = buildModeArgs(
+        _settings(executionMode: ExecutionMode.container, keepGoing: true),
+        dryRun: false,
+      );
+      expect(keep, contains('--keep-going'));
+      final stop = buildModeArgs(
+        _settings(executionMode: ExecutionMode.container, keepGoing: false),
+        dryRun: false,
+      );
+      expect(stop, contains('--no-keep-going'));
     });
 
     test('foundry in local mode still threads buildroot-dir', () {

@@ -131,6 +131,7 @@ void main() {
         targets: 'desktop',
         executionMode: ExecutionMode.github,
         runnerProfile: 'self-hosted',
+        containerProfile: 'pool',
         buildMode: 'debug',
         repoRoot: '/repos/anvil',
         githubRepo: 'cepheus/anvil',
@@ -153,6 +154,7 @@ void main() {
       expect(restored.targets, 'desktop');
       expect(restored.executionMode, ExecutionMode.github);
       expect(restored.runnerProfile, 'self-hosted');
+      expect(restored.containerProfile, 'pool');
       expect(restored.buildMode, 'debug');
       expect(restored.repoRoot, '/repos/anvil');
       expect(restored.githubRepo, 'cepheus/anvil');

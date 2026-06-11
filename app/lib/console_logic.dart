@@ -51,6 +51,15 @@ List<String> buildModeArgs(BuildSettings settings, {required bool dryRun}) {
     return args;
   }
 
+  if (settings.executionMode == ExecutionMode.container) {
+    // Each target routes into a container/VM of its OS; --install-missing-deps
+    // is intentionally omitted (those environments are pre-provisioned).
+    args.addAll(['--container-profile', settings.containerProfile]);
+    args.addAll(['--mode', settings.buildMode]);
+    args.add(settings.keepGoing ? '--keep-going' : '--no-keep-going');
+    return args;
+  }
+
   args.addAll(['--mode', settings.buildMode]);
   if (!dryRun) args.add('--install-missing-deps');
   if (settings.skipUnsupported) args.add('--skip-unsupported');

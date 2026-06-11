@@ -15,6 +15,19 @@ linux = ["self-hosted", "linux"]
 macos = ["self-hosted", "macos"]
 windows = ["self-hosted", "windows"]
 
+# ── Container / VM execution backend (build any OS from any host) ─────────────
+# Used by `cepheus-build build ... --execution-mode container`. Each host key
+# names where that OS's targets build. `kind = "docker"` runs a Linux build
+# image locally (no KVM); `kind = "ssh"` dispatches into a dockur KVM VM on a
+# remote Linux host (see docker/compose.yml + docs/cross-os-builds.md). The
+# dockur macOS/Windows VMs require /dev/kvm, which only the remote bare-metal
+# Linux host provides — Linux/Android/Web build locally in the container.
+[container_profiles.default]
+label = "Container/VM pool"
+linux = { kind = "docker", image = "ghcr.io/cepheuslabs/cepheus-build-linux:latest", workdir = "/work" }
+windows = { kind = "ssh", host = "192.168.0.98", port = 2322, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "powershell" }
+macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "posix" }
+
 [tools.appimagetool]
 hint = "install appimagetool from the AppImageKit releases"
 
@@ -78,6 +91,21 @@ install = { macos = ["brew install --cask docker"], windows = ["winget install -
 hint = "start Docker Desktop, Docker Engine, Colima, OrbStack, or another Docker-compatible daemon; the Docker CLI alone is not enough"
 check = { linux = ["docker info >/dev/null 2>&1"], macos = ["docker info >/dev/null 2>&1"], windows = ["docker info >NUL 2>&1"] }
 install = { macos = ["open -a Docker || true; for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; docker info"] }
+
+# kvm/ssh/rsync back the container execution backend (--execution-mode container).
+# `kvm` is only meaningful on the remote Linux host that runs the dockur macOS /
+# Windows VMs; the dockur images refuse to boot without /dev/kvm.
+[tools.kvm]
+hint = "the dockur macOS/Windows VMs need /dev/kvm (bare-metal Linux, or nested virtualization). Not available in Docker Desktop on WSL2 by default."
+check = { linux = ["test -e /dev/kvm"] }
+
+# ssh + rsync run on the *dispatch* host to drive SSH (Windows/macOS VM) targets.
+# Native on macOS/Linux; on Windows ssh ships with OpenSSH client, rsync comes
+# from Git-Bash/MSYS (or dispatch SSH builds from the Linux host / WSL).
+[tools.ssh]
+hint = "install an OpenSSH client and make sure ssh is on PATH"
+[tools.rsync]
+hint = "install rsync and make sure it is on PATH (Git-Bash/MSYS on Windows)"
 
 [tools.flutter]
 hint = "install Flutter and make sure flutter is on PATH"

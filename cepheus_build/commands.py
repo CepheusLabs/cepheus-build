@@ -26,6 +26,11 @@ from .config import (
     normalize_hosts,
     resolve_path,
 )
+from .container import (
+    cmd_container_build,
+    container_profile_config,
+    container_profile_names,
+)
 from .dependency_model import (
     dependency_audit_issues,
     dependency_outputs,
@@ -167,6 +172,16 @@ def _runner_profile_options() -> list[dict[str, str]]:
     return options
 
 
+def _container_profile_options() -> list[dict[str, str]]:
+    """[{"value","label"}] for every container/VM profile in build.toml."""
+    options: list[dict[str, str]] = []
+    for name in container_profile_names():
+        profile = container_profile_config(name)
+        label = profile.get("label", name)
+        options.append({"value": name, "label": str(label)})
+    return options
+
+
 def _target_choices(config: ProductConfig) -> list[str]:
     """Group names followed by enabled target names, deduped, order-preserving.
 
@@ -224,6 +239,7 @@ def _describe_product(config: ProductConfig) -> dict:
             for name, store in config.stores.items()
         },
         "runner_profiles": _runner_profile_options(),
+        "container_profiles": _container_profile_options(),
         "target_choices": _target_choices(config),
     }
 
@@ -250,6 +266,7 @@ def cmd_describe(args: argparse.Namespace) -> int:
             )
         ],
         "runner_profiles": _runner_profile_options(),
+        "container_profiles": _container_profile_options(),
     }
     print(json.dumps(payload))
     return 0
@@ -481,6 +498,8 @@ def cmd_build(args: argparse.Namespace) -> int:
     config = load_product(args)
     if args.execution_mode == "github":
         return cmd_github_build(config, args)
+    if args.execution_mode == "container":
+        return cmd_container_build(config, args)
 
     targets = config.expand_targets(args.targets)
     if not args.dry_run and not getattr(args, "no_sync", False):
@@ -656,6 +675,12 @@ def cmd_local_sweep(args: argparse.Namespace) -> int:
         extra_env = buildroot_env(args)
         print(f"\n## {config.display_name} ({product_name})")
         try:
+            if getattr(args, "execution_mode", "local") == "container":
+                if cmd_container_build(config, args) != 0:
+                    failures.append((product_name, "container build failed"))
+                    if not args.keep_going:
+                        break
+                continue
             if not args.dry_run and not getattr(args, "no_sync", False):
                 sync_repo_before_build(
                     config.repo_root,

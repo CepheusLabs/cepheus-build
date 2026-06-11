@@ -1,0 +1,73 @@
+# Cepheus Build — cross-OS build VM pool.
+#
+# Runs on the REMOTE Linux host that has real /dev/kvm (e.g. errai). The
+# `windows` and `macos` services are full QEMU/KVM VMs (dockur) that the
+# container backend reaches over SSH; they will NOT boot without /dev/kvm.
+#
+#   docker compose --profile build-image build linux   # build the Linux image
+#   docker compose up -d windows macos                  # start the VM pool
+#
+# First boot is slow (the OS installs). Provision each VM once (see
+# windows/oem/install.bat — run automatically — and macos/provision.sh —
+# run manually after enabling Remote Login). See ../docs/cross-os-builds.md.
+name: cepheus-build-vms
+
+services:
+  # Linux build image. Not a long-running service — the container backend does
+  # its own `docker run` per build. This entry just builds/tags/pushes the image.
+  linux:
+    profiles: ["build-image"]
+    build:
+      context: ./linux
+    image: ghcr.io/cepheuslabs/cepheus-build-linux:latest
+    command: ["flutter", "--version"]
+
+  windows:
+    image: dockurr/windows
+    container_name: cbuild-windows
+    environment:
+      VERSION: "${CBUILD_WINDOWS_VERSION:-11}"
+      USERNAME: "${CBUILD_WINDOWS_USER:-cbuild}"
+      PASSWORD: "${CBUILD_WINDOWS_PASSWORD:-cbuild}"
+      RAM_SIZE: "${CBUILD_WINDOWS_RAM:-8G}"
+      CPU_CORES: "${CBUILD_WINDOWS_CPUS:-4}"
+      DISK_SIZE: "${CBUILD_WINDOWS_DISK:-128G}"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8306:8006"   # web viewer (noVNC) — watch the unattended install
+      - "2322:22"     # OpenSSH (enabled by oem/install.bat) → profile endpoint
+      - "3389:3389"   # RDP (optional, for manual access)
+    volumes:
+      - ./windows/oem:/oem        # dockur runs /oem/install.bat post-install
+      - cbuild-windows:/storage
+    stop_grace_period: 2m
+    restart: unless-stopped
+
+  macos:
+    image: dockurr/macos
+    container_name: cbuild-macos
+    environment:
+      VERSION: "${CBUILD_MACOS_VERSION:-14}"   # 14 = Sonoma
+      RAM_SIZE: "${CBUILD_MACOS_RAM:-8G}"
+      CPU_CORES: "${CBUILD_MACOS_CPUS:-4}"
+      DISK_SIZE: "${CBUILD_MACOS_DISK:-128G}"
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8406:8006"   # web viewer (noVNC) — complete first-boot setup here
+      - "2422:22"     # SSH (enable Remote Login, then run provision.sh)
+    volumes:
+      - cbuild-macos:/storage
+    stop_grace_period: 2m
+    restart: unless-stopped
+
+volumes:
+  cbuild-windows:
+  cbuild-macos:

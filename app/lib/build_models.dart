@@ -18,7 +18,8 @@ enum BuildAction {
 
 enum ExecutionMode {
   local('Local', 'local'),
-  github('GitHub', 'github');
+  github('GitHub', 'github'),
+  container('Container', 'container');
 
   const ExecutionMode(this.label, this.value);
 
@@ -40,6 +41,7 @@ class BuildSettings {
     required this.targets,
     required this.executionMode,
     required this.runnerProfile,
+    required this.containerProfile,
     required this.buildMode,
     required this.repoRoot,
     required this.githubRepo,
@@ -59,6 +61,7 @@ class BuildSettings {
       targets: 'all',
       executionMode: ExecutionMode.local,
       runnerProfile: 'github-hosted',
+      containerProfile: 'default',
       buildMode: 'release',
       repoRoot: '',
       githubRepo: '',
@@ -84,6 +87,7 @@ class BuildSettings {
         _string(json['executionMode'], ExecutionMode.local.value),
       ),
       runnerProfile: _string(json['runnerProfile'], 'github-hosted'),
+      containerProfile: _string(json['containerProfile'], 'default'),
       buildMode: _string(json['buildMode'], 'release'),
       repoRoot: _string(json['repoRoot'], ''),
       githubRepo: _string(json['githubRepo'], ''),
@@ -106,6 +110,7 @@ class BuildSettings {
   final String targets;
   final ExecutionMode executionMode;
   final String runnerProfile;
+  final String containerProfile;
   final String buildMode;
   final String repoRoot;
   final String githubRepo;
@@ -125,6 +130,7 @@ class BuildSettings {
     String? targets,
     ExecutionMode? executionMode,
     String? runnerProfile,
+    String? containerProfile,
     String? buildMode,
     String? repoRoot,
     String? githubRepo,
@@ -142,6 +148,7 @@ class BuildSettings {
       targets: targets ?? this.targets,
       executionMode: executionMode ?? this.executionMode,
       runnerProfile: runnerProfile ?? this.runnerProfile,
+      containerProfile: containerProfile ?? this.containerProfile,
       buildMode: buildMode ?? this.buildMode,
       repoRoot: repoRoot ?? this.repoRoot,
       githubRepo: githubRepo ?? this.githubRepo,
@@ -162,6 +169,7 @@ class BuildSettings {
       'targets': targets,
       'executionMode': executionMode.value,
       'runnerProfile': runnerProfile,
+      'containerProfile': containerProfile,
       'buildMode': buildMode,
       'repoRoot': repoRoot,
       'githubRepo': githubRepo,

@@ -31,6 +31,22 @@ Build one target when you are on the right host:
 ../cepheus-build/bin/cepheus-build build -p deckhand --repo-root "$PWD" windows-installer
 ```
 
+## Container / VM Builds
+
+To build for an OS you are not on, use `--execution-mode container`. Each target
+is routed into a container or VM of its OS and the same `cepheus-build` runs
+there, so you can produce every OS's artifacts from one host:
+
+```bash
+../cepheus-build/bin/cepheus-build build -p printdeck-app --repo-root "$PWD" all --execution-mode container
+```
+
+Linux/Android/Web build in a local Docker image (no KVM); Windows and macOS
+build in dockur KVM VMs on a remote Linux host, reached over SSH. Endpoints live
+under `[container_profiles.*]` in `build.toml`. `describe -p <product> --json`
+includes the available `container_profiles`. See
+[`cross-os-builds.md`](cross-os-builds.md) for the full setup.
+
 ## GitHub-Hosted Runners
 
 GitHub-hosted runners are opt-in. Add a thin workflow in the app repo and set

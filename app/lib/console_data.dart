@@ -42,6 +42,15 @@ extension _ConsoleData on _BuildConsoleHomeState {
         )) {
       settings = settings.copyWith(runnerProfile: runnerProfiles.first.value);
     }
+    final containerProfiles = await _loadContainerProfiles(toolkitRoot);
+    if (containerProfiles.isNotEmpty &&
+        !containerProfiles.any(
+          (profile) => profile.value == settings.containerProfile,
+        )) {
+      settings = settings.copyWith(
+        containerProfile: containerProfiles.first.value,
+      );
+    }
     final descriptor = await _loadProductDescriptor(
       toolkitRoot,
       settings.product,
@@ -58,6 +67,7 @@ extension _ConsoleData on _BuildConsoleHomeState {
       _selectedHistory = entries.isEmpty ? null : entries.first;
       _products = products;
       _runnerProfiles = runnerProfiles;
+      _containerProfiles = containerProfiles;
       _productDescriptor = descriptor;
       _loading = false;
       _repoRootController.text = settings.repoRoot;
@@ -193,6 +203,28 @@ extension _ConsoleData on _BuildConsoleHomeState {
     return profiles;
   }
 
+  Future<List<_RunnerProfileChoice>> _loadContainerProfiles(
+    String toolkitRoot,
+  ) async {
+    final data = await _describeJson(toolkitRoot);
+    if (data == null) return const [];
+    final raw = data['container_profiles'];
+    if (raw is! List) return const [];
+    final profiles = <_RunnerProfileChoice>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final value = _jsonString(entry['value']);
+      if (value.isEmpty) continue;
+      profiles.add(
+        _RunnerProfileChoice(
+          value: value,
+          label: _jsonString(entry['label'], value),
+        ),
+      );
+    }
+    return profiles;
+  }
+
   BuildSettings _settingsForDescriptor(
     BuildSettings settings,
     _ProductDescriptor descriptor,
@@ -265,11 +297,13 @@ extension _ConsoleData on _BuildConsoleHomeState {
     final productsError = products.isEmpty ? _describeError : null;
     final runnerProfiles = await _loadRunnerProfiles(_settings.toolkitRoot);
     final runnerError = runnerProfiles.isEmpty ? _describeError : null;
+    final containerProfiles = await _loadContainerProfiles(_settings.toolkitRoot);
     var settings = _settings;
     if (!mounted) return;
     _setStateSafe(() {
       _products = products;
       _runnerProfiles = runnerProfiles;
+      _containerProfiles = containerProfiles;
       if (products.isNotEmpty && !products.contains(_settings.product)) {
         settings = _settings.copyWith(product: products.first);
       }
@@ -350,6 +384,10 @@ extension _ConsoleData on _BuildConsoleHomeState {
 
   void _setRunnerProfile(String profile) {
     _updateSettings(_settings.copyWith(runnerProfile: profile));
+  }
+
+  void _setContainerProfile(String profile) {
+    _updateSettings(_settings.copyWith(containerProfile: profile));
   }
 
   void _setBuildMode(String mode) {

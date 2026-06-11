@@ -85,6 +85,7 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
   List<String> _products = const [];
   List<_RunnerProfileChoice> _runnerProfiles = const [];
+  List<_RunnerProfileChoice> _containerProfiles = const [];
   _ProductDescriptor _productDescriptor = _ProductDescriptor.empty('printdeck-app');
   List<BuildHistoryEntry> _history = const [];
   BuildHistoryEntry? _selectedHistory;
@@ -104,6 +105,8 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
 
   bool get _isRunning => _process != null;
   bool get _isGitHubMode => _settings.executionMode == ExecutionMode.github;
+  bool get _isContainerMode =>
+      _settings.executionMode == ExecutionMode.container;
   bool get _isFoundry => _settings.product == 'foundry';
   _StoreDescriptor? get _selectedStore {
     for (final store in _productDescriptor.storeChoices) {
@@ -132,6 +135,21 @@ class _BuildConsoleHomeState extends State<BuildConsoleHome> {
       if (choice.value == profile) return choice.label;
     }
     return profile;
+  }
+
+  List<_RunnerProfileChoice> get _availableContainerProfiles {
+    if (_containerProfiles.any(
+      (profile) => profile.value == _settings.containerProfile,
+    )) {
+      return _containerProfiles;
+    }
+    return [
+      _RunnerProfileChoice(
+        value: _settings.containerProfile,
+        label: _settings.containerProfile,
+      ),
+      ..._containerProfiles,
+    ];
   }
 
   File get _historyFile =>
