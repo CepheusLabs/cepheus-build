@@ -61,7 +61,8 @@ REM C++". The workload rides the SAME bootstrapper invocation via
 REM --package-parameters: the separate visualstudio2022-workload-* choco
 REM package can exit 0 without actually installing the payload when queued
 REM in the same transaction.
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+REM VC.ATL: flutter_secure_storage_windows (and other plugins) include atlstr.h.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.ATL --includeRecommended"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: VS Build Tools install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
