@@ -22,6 +22,25 @@ on:
         required: false
         default: all
         type: string
+      # Tag-authoritative stamp overrides (release-pipeline locked decision L5):
+      # app-release.yml parses the pushed tag and passes the parsed values here
+      # so re-runs are reproducible. Empty (the default) keeps compute_stamp's
+      # own date + rev-list stamping for plain CI builds.
+      version:
+        description: CBUILD_VERSION override (YY.M.D). Empty = compute_stamp.
+        required: false
+        default: ''
+        type: string
+      build-number:
+        description: CBUILD_BUILD_NUMBER override. Empty = compute_stamp.
+        required: false
+        default: ''
+        type: string
+      channel:
+        description: Release channel exported as CBUILD_CHANNEL (stable, beta, nightly). Empty = unset.
+        required: false
+        default: ''
+        type: string
       runner-profile:
         description: github-hosted or self-hosted. Ignored when matrix-json is set.
         required: false
@@ -312,6 +331,11 @@ jobs:
         shell: bash
         env:
           BUILDROOT_DIR: ${{ inputs['buildroot-dir'] }}
+          # Tag-authoritative stamp overrides (empty values are ignored by
+          # compute_stamp, so plain CI builds keep date+rev-list stamping).
+          CBUILD_VERSION: ${{ inputs.version }}
+          CBUILD_BUILD_NUMBER: ${{ inputs['build-number'] }}
+          CBUILD_CHANNEL: ${{ inputs.channel }}
           # Code-signing passthrough. Every var is optional — when a secret is
           # unset the packaging scripts emit an unsigned artifact + warning, so
           # builds work before signing is configured. Never echoed to logs.

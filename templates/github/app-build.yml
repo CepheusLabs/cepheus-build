@@ -8,7 +8,7 @@ jobs:
   build:
     uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
     with:
-      product: printdeck
+      product: printdeck-app
       toolkit-ref: main
       runner-profile: self-hosted
       planner-runner-json: '["self-hosted","linux"]'

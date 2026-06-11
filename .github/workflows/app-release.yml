@@ -1,0 +1,196 @@
+# Shared App Release — tag-triggered release pipeline (workflow_call).
+#
+# Wraps app-build.yml per the release-pipeline plan (Phase 2.2, locked
+# decisions L4/L5): a product repo's ~20-line caller (templates/github/
+# app-release.yml) invokes this on tag push. The tag is authoritative —
+# `v<YY.M.D>-<count>` (stable) or `beta-v<YY.M.D>-<count>` (beta) is parsed
+# here and the parsed version/build number flow into every job, so re-runs
+# are reproducible (compute_stamp is only used at tag-creation time by
+# `cepheus-build release`).
+#
+# Job graph: prepare (parse tag) -> release (GH release, internal mirror)
+#            -> build (nested app-build.yml) -> publish (store lanes; dry-run
+#            for now — real uploads land in later plan phases).
+name: Shared App Release
+
+on:
+  workflow_call:
+    inputs:
+      product:
+        description: Product config name in products/<product>.toml.
+        required: true
+        type: string
+      targets:
+        description: Space-separated targets or groups to build.
+        required: false
+        default: all
+        type: string
+      toolkit-ref:
+        description: cepheus-build ref to checkout inside jobs.
+        required: false
+        default: main
+        type: string
+      runner-profile:
+        description: Runner profile for the build matrix.
+        required: false
+        default: self-hosted
+        type: string
+      planner-runner-json:
+        description: JSON runs-on value for the planning/control jobs.
+        required: false
+        default: '["self-hosted","linux"]'
+        type: string
+      mode:
+        description: Flutter build mode.
+        required: false
+        default: release
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  prepare:
+    name: Parse release tag
+    runs-on: ${{ fromJSON(inputs['planner-runner-json']) }}
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      build_number: ${{ steps.parse.outputs.build_number }}
+      channel: ${{ steps.parse.outputs.channel }}
+      tag: ${{ steps.parse.outputs.tag }}
+    steps:
+      - name: Parse tag
+        id: parse
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::app-release.yml must run on a tag push; got ref_type=$REF_TYPE ($REF_NAME)."
+            exit 1
+          fi
+          TAG="$REF_NAME"
+          case "$TAG" in
+            beta-v*) CHANNEL=beta;   CORE="${TAG#beta-}" ;;
+            v*)      CHANNEL=stable; CORE="$TAG" ;;
+            *)
+              echo "::error::malformed release tag '$TAG' (expected v<YY.M.D>-<count> or beta-v<YY.M.D>-<count>)."
+              exit 1
+              ;;
+          esac
+          if [[ ! "$CORE" =~ ^v([0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2})-([0-9]+)$ ]]; then
+            echo "::error::malformed release tag '$TAG' (expected v<YY.M.D>-<count> or beta-v<YY.M.D>-<count>)."
+            exit 1
+          fi
+          {
+            echo "version=${BASH_REMATCH[1]}"
+            echo "build_number=${BASH_REMATCH[2]}"
+            echo "channel=$CHANNEL"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+          echo "release: $TAG -> version=${BASH_REMATCH[1]} build_number=${BASH_REMATCH[2]} channel=$CHANNEL"
+
+  release:
+    # The GitHub Release is the INTERNAL archival mirror (locked decision L2):
+    # repos are private and release assets are never linked publicly. This is
+    # the step every `github_release` lane assumes exists before it uploads.
+    name: GitHub release (internal mirror)
+    needs: prepare
+    runs-on: ${{ fromJSON(inputs['planner-runner-json']) }}
+    steps:
+      - name: Create release for tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release: $TAG already exists (re-run); leaving it as-is."
+            exit 0
+          fi
+          args=(--verify-tag --title "$TAG" --notes-from-tag)
+          if [ "$CHANNEL" = "beta" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${args[@]}"
+
+  build:
+    name: Build
+    needs: [prepare, release]
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    with:
+      product: ${{ inputs.product }}
+      toolkit-ref: ${{ inputs['toolkit-ref'] }}
+      mode: ${{ inputs.mode }}
+      targets: ${{ inputs.targets }}
+      runner-profile: ${{ inputs['runner-profile'] }}
+      planner-runner-json: ${{ inputs['planner-runner-json'] }}
+      version: ${{ needs.prepare.outputs.version }}
+      build-number: ${{ needs.prepare.outputs.build_number }}
+      channel: ${{ needs.prepare.outputs.channel }}
+    secrets: inherit
+
+  publish:
+    # Store-lane deploys. DRY-RUN for now: validates lane wiring (config,
+    # command rendering, channel plumbing) on every release without touching
+    # stores. Real uploads (artifact download + CBUILD_ARTIFACTS_DIR handoff +
+    # per-host deploy matrix) land in later plan phases (2.3/3/4).
+    name: Publish store lanes (dry-run)
+    needs: [prepare, build]
+    runs-on: ${{ fromJSON(inputs['planner-runner-json']) }}
+    steps:
+      - name: Checkout product
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Checkout build toolkit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: CepheusLabs/cepheus-build
+          ref: ${{ inputs['toolkit-ref'] }}
+          path: .cepheus-build
+
+      - name: Deploy enabled lanes (dry-run)
+        shell: bash
+        env:
+          PRODUCT: ${{ inputs.product }}
+          # Tag-authoritative stamp: lane commands render the same
+          # version/tag the release job created.
+          CBUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          CBUILD_BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+          CBUILD_CHANNEL: ${{ needs.prepare.outputs.channel }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python)"
+          # Enabled lanes whose host gate admits this (linux) publish host;
+          # other hosts' lanes join via the per-host deploy matrix later.
+          lanes="$("$PYTHON_BIN" .cepheus-build/bin/cepheus-build describe \
+              --product "$PRODUCT" --repo-root "$GITHUB_WORKSPACE" --json \
+            | "$PYTHON_BIN" -c '
+          import json, sys
+          stores = json.load(sys.stdin)["stores"]
+          for name in sorted(stores):
+              store = stores[name]
+              if store.get("enabled") and "linux" in (store.get("hosts") or []):
+                  print(name)
+          ')"
+          if [ -z "$lanes" ]; then
+            echo "publish: no enabled linux-host store lanes for $PRODUCT; nothing to do."
+            exit 0
+          fi
+          for lane in $lanes; do
+            echo "::group::deploy $lane (dry-run)"
+            "$PYTHON_BIN" .cepheus-build/bin/cepheus-build deploy \
+              --product "$PRODUCT" \
+              --repo-root "$GITHUB_WORKSPACE" \
+              "$lane" --dry-run
+            echo "::endgroup::"
+          done

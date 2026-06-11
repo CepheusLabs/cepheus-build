@@ -1,0 +1,24 @@
+# Per-product release caller — copy to <product-repo>/.github/workflows/release.yml
+# and set `product:`. Pushing an annotated tag created by `cepheus-build release`
+# (v<YY.M.D>-<count> stable, beta-v<YY.M.D>-<count> beta) runs the shared
+# release pipeline; all logic lives in cepheus-build (app-release.yml).
+name: release
+
+on:
+  push:
+    tags: ['v*', 'beta-v*']
+  workflow_dispatch:   # fallback: re-run from a tag ref in the UI
+
+permissions:
+  contents: write   # gh release create + asset upload
+
+concurrency:
+  group: release    # serialize releases; never cancel an in-flight one
+
+jobs:
+  release:
+    uses: CepheusLabs/cepheus-build/.github/workflows/app-release.yml@main
+    with:
+      product: deckhand
+      targets: all
+    secrets: inherit   # org/repo signing + store secrets; unset ones degrade gracefully
