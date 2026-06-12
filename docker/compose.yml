@@ -73,6 +73,7 @@ services:
       - cbuild-builder-pub:/home/builder/.pub-cache
       - cbuild-builder-cargo:/home/builder/.cargo/registry
       - cbuild-builder-gomod:/home/builder/go/pkg/mod
+      - cbuild-builder-hostkeys:/etc/ssh/persistent
     restart: unless-stopped
 
   macos:
@@ -102,3 +103,4 @@ volumes:
   cbuild-builder-pub:
   cbuild-builder-cargo:
   cbuild-builder-gomod:
+  cbuild-builder-hostkeys:

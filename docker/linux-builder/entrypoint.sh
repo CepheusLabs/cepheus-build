@@ -8,6 +8,25 @@
 set -euo pipefail
 export PATH="/usr/sbin:/sbin:${PATH}"
 
+# Persist sshd host keys across container recreates: a fresh image layer
+# regenerates them, which makes every dispatch host's known_hosts entry a
+# CHANGED key (accept-new rightly refuses). Generated once into the mounted
+# volume, then reused.
+mkdir -p /etc/ssh/persistent
+if ! ls /etc/ssh/persistent/ssh_host_*_key >/dev/null 2>&1; then
+  ssh-keygen -A -f /etc/ssh/persistent >/dev/null
+  mv /etc/ssh/persistent/etc/ssh/ssh_host_* /etc/ssh/persistent/ 2>/dev/null || true
+  rm -rf /etc/ssh/persistent/etc
+fi
+for key in /etc/ssh/persistent/ssh_host_*_key; do
+  echo "HostKey $key"
+done > /etc/ssh/sshd_config.d/10-persistent-hostkeys.conf
+
+# The root-owned /opt/flutter triggers git's dubious-ownership guard for the
+# builder user (the base image whitelists it only for root).
+printf '[safe]\n\tdirectory = *\n' > /home/builder/.gitconfig
+chown builder:builder /home/builder/.gitconfig
+
 keys="${AUTHORIZED_KEYS_FILE:-/authorized_keys}"
 if [ -f "$keys" ]; then
   mkdir -p /home/builder/.ssh
