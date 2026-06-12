@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Cepheus Build — ephemeral GitHub Actions runner entrypoint (first-party).
 #
+# The base image's ENV PATH (toolchain dirs) omits the sbin dirs, which the
+# root phase needs for usermod/groupmod; prepend them defensively.
+export PATH="/usr/sbin:/sbin:${PATH}"
+#
 # Registers an EPHEMERAL org-scoped runner against https://github.com/<org>
 # and re-registers in an endless loop: `--ephemeral` deregisters the runner
 # after exactly one job, so every job starts on a freshly registered runner

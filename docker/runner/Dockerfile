@@ -36,8 +36,10 @@ RUN set -eux; \
 # config.sh refuses to run as root; jobs also expect a non-root user with
 # passwordless sudo (app-build.yml installs apt packages with `sudo`). The
 # docker group GID is aligned to the host's mounted socket at container start
-# (entrypoint.sh root phase).
+# (entrypoint.sh root phase). The base image's ENV PATH (toolchain dirs) drops
+# the sbin dirs, so the user/group tools need explicit paths.
 RUN set -eux; \
+    export PATH="/usr/sbin:/sbin:${PATH}"; \
     useradd -m -d /home/runner -s /bin/bash runner; \
     echo "runner ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner; \
     chmod 0440 /etc/sudoers.d/runner; \
