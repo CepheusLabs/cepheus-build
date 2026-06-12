@@ -34,7 +34,13 @@ eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shell
 
 # --- Toolchains -----------------------------------------------------------
 brew install --cask flutter
-brew install cocoapods go create-dmg
+# python@3.12: the Xcode CLT python3 is 3.9, too old for the toolkit
+# (tomllib needs >= 3.11). Homebrew does not link an unversioned python3,
+# and non-interactive ssh shells skip path_helper, so both get fixed here.
+brew install cocoapods go create-dmg python@3.12
+ln -sf "$(brew --prefix)/bin/python3.12" "$(brew --prefix)/bin/python3"
+grep -q "/usr/local/bin" "$HOME/.zshenv" 2>/dev/null \
+  || echo 'export PATH=/usr/local/bin:$PATH' >> "$HOME/.zshenv"
 # Rust via rustup (pinned to the ecosystem standard).
 if ! command -v rustup >/dev/null 2>&1; then
   curl -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0 --profile minimal
