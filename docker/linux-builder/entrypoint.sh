@@ -19,12 +19,16 @@ else
   echo "builder-entrypoint: WARNING: no authorized_keys at $keys; ssh logins will fail." >&2
 fi
 
-# Toolchain homes were installed by root in the base image; the builder user
-# needs the caches writable (named volumes mount fresh as root).
+# Cache volumes mount root-owned when fresh; hand them to builder ONCE.
+# Never -R an already-builder-owned tree: a populated pub cache has tens of
+# thousands of files and a recursive chown stalls boot for minutes.
 for dir in /home/builder/.pub-cache /home/builder/.cargo/registry /home/builder/go/pkg/mod; do
   mkdir -p "$dir"
-  chown -R builder:builder "$(dirname "$dir")" 2>/dev/null || chown -R builder:builder "$dir"
+  if [ "$(stat -c %U "$dir")" != "builder" ]; then
+    chown -R builder:builder "$dir"
+  fi
 done
+chown builder:builder /home/builder /home/builder/.cargo /home/builder/go /home/builder/go/pkg 2>/dev/null || true
 
 # Flutter/dart need a writable SDK dir for the builder user only when the
 # sdk cache updates; grant group write instead of duplicating the SDK.
