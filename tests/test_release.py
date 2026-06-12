@@ -44,12 +44,14 @@ class FakeGit:
         self,
         *,
         worktree: bool = True,
+        shallow: bool = False,
         dirty: bool = False,
         local_tag: bool = False,
         remote_tag: bool = False,
         remote_ok: bool = True,
     ):
         self.worktree = worktree
+        self.shallow = shallow
         self.dirty = dirty
         self.local_tag = local_tag
         self.remote_tag = remote_tag
@@ -57,6 +59,8 @@ class FakeGit:
 
     def __call__(self, args, cwd):
         command = args[0]
+        if command == "rev-parse" and "--is-shallow-repository" in args:
+            return _proc(0, "true\n" if self.shallow else "false\n")
         if command == "rev-parse":
             if self.worktree:
                 return _proc(0, "true\n")
@@ -142,6 +146,14 @@ class TestCreateReleaseTag:
     def test_not_a_worktree_refused(self, tmp_path, monkeypatch, recorded_git):
         monkeypatch.setattr(release, "git_capture", FakeGit(worktree=False))
         with pytest.raises(BuildError, match="not a git worktree"):
+            release.create_release_tag(_config(tmp_path), STAMP)
+        assert recorded_git == []
+
+    def test_shallow_clone_refused(self, tmp_path, monkeypatch, recorded_git):
+        # rev-list --count is wrong in shallow clones, so the build number
+        # (and therefore the tag) would be wrong: fail with the unshallow hint.
+        monkeypatch.setattr(release, "git_capture", FakeGit(shallow=True))
+        with pytest.raises(BuildError, match="shallow clone.*--unshallow"):
             release.create_release_tag(_config(tmp_path), STAMP)
         assert recorded_git == []
 

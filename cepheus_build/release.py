@@ -51,7 +51,7 @@ def git_capture(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def ensure_release_preconditions(repo_root: Path, tag: str) -> None:
-    """Hard gates before tagging: worktree, clean tree, tag not taken.
+    """Hard gates before tagging: worktree, full clone, clean tree, tag not taken.
 
     Unlike the best-effort build sync (``working_tree_dirty`` tolerates git
     errors), a release fails CLOSED: any check that cannot be answered
@@ -60,6 +60,19 @@ def ensure_release_preconditions(repo_root: Path, tag: str) -> None:
     worktree = git_capture(["rev-parse", "--is-inside-work-tree"], repo_root)
     if worktree.returncode != 0 or worktree.stdout.strip().lower() != "true":
         raise BuildError(f"{repo_root} is not a git worktree; cannot create a release tag.")
+
+    shallow = git_capture(["rev-parse", "--is-shallow-repository"], repo_root)
+    if shallow.returncode != 0:
+        raise BuildError(
+            f"could not determine clone depth in {repo_root}: "
+            f"{shallow.stderr.strip() or 'rev-parse --is-shallow-repository failed'}"
+        )
+    if shallow.stdout.strip().lower() == "true":
+        raise BuildError(
+            f"{repo_root} is a shallow clone; the build number "
+            "(`git rev-list --count HEAD`) would be wrong there. "
+            "Run `git fetch --unshallow` first."
+        )
 
     status = git_capture(["status", "--porcelain"], repo_root)
     if status.returncode != 0:
