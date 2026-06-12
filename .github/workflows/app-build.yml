@@ -301,16 +301,21 @@ jobs:
           cache: true
 
       - name: Configure writable Rustup home
-        if: ${{ inputs['setup-rust'] && (matrix.setup_rust || matrix.setup_cargo_ndk || matrix.setup_wasm_pack) }}
+        if: ${{ inputs['setup-rust'] && matrix.setup_rust }}
         shell: bash
+        env:
+          JOB_RUSTUP_HOME: ${{ runner.temp }}/rustup
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.rustup"
-          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          mkdir -p "$JOB_RUSTUP_HOME"
+          echo "RUSTUP_HOME=$JOB_RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "rustup home: $JOB_RUSTUP_HOME"
 
       - name: Set up Rust
         if: ${{ inputs['setup-rust'] && matrix.setup_rust }}
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup
         with:
           toolchain: ${{ inputs['rust-toolchain'] }}
 
