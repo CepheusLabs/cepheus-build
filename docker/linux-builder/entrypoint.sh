@@ -31,13 +31,14 @@ done
 chmod -R g+w /opt/flutter 2>/dev/null || true
 chgrp -R builder /opt/flutter 2>/dev/null || true
 
-# sshd scrubs the container ENV, so remote commands would lose the toolchain
-# PATH. Bash sources ~/.bashrc for ssh-spawned non-interactive shells, which
-# makes this the one reliable hook.
-if ! grep -q "cepheus-toolchains" /home/builder/.bashrc 2>/dev/null; then
-  echo 'export PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:/usr/local/go/bin:/root/go/bin:/home/builder/.cargo/bin:/usr/local/bin:$PATH" # cepheus-toolchains' \
-    >> /home/builder/.bashrc
-  chown builder:builder /home/builder/.bashrc
-fi
+# sshd scrubs the container ENV and Ubuntu's stock ~/.bashrc returns early
+# for non-interactive shells, so neither carries the toolchain PATH into
+# remote commands. /etc/environment is read by PAM for EVERY ssh session,
+# shell- and interactivity-independent. NOTE: it is not shell-parsed -- the
+# full literal path list is required (no $PATH expansion).
+cat > /etc/environment <<'ENV'
+PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:/usr/local/go/bin:/home/builder/go/bin:/home/builder/.cargo/bin:/home/builder/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+GOWORK=off
+ENV
 
 exec /usr/sbin/sshd -D -e
