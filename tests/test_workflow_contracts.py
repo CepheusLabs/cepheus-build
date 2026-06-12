@@ -10,6 +10,14 @@ def test_app_build_default_go_version_matches_ecosystem_standard() -> None:
     assert "default: '1.26.4'" in workflow
 
 
+def test_app_build_default_flutter_version_matches_runner_image() -> None:
+    workflow = Path(".github/workflows/app-build.yml").read_text()
+
+    assert "flutter-version:" in workflow
+    assert "default: '3.41.7'" in workflow
+    assert "flutter-version: ${{ inputs['flutter-version'] }}" in workflow
+
+
 def test_app_build_exports_git_auth_for_child_package_fetches() -> None:
     workflow = Path(".github/workflows/app-build.yml").read_text()
 

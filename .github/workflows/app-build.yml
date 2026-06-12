@@ -56,6 +56,11 @@ on:
         required: false
         default: true
         type: boolean
+      flutter-version:
+        description: Flutter SDK version for subosito/flutter-action.
+        required: false
+        default: '3.41.7'
+        type: string
       setup-rust:
         description: Install Rust when a matrix row uses cargo/rustup.
         required: false
@@ -274,6 +279,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ inputs['flutter-version'] }}
           cache: true
 
       - name: Set up Rust
