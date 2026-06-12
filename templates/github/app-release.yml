@@ -7,7 +7,7 @@ name: release
 on:
   push:
     tags: ['v*', 'beta-v*']
-  workflow_dispatch:   # fallback: re-run from a tag ref in the UI
+  workflow_dispatch:   # fallback: MUST be dispatched from a TAG ref (v.../beta-v...), not a branch — prepare rejects branch refs
 
 permissions:
   contents: write   # gh release create + asset upload

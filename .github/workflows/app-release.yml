@@ -46,6 +46,13 @@ on:
         default: release
         type: string
 
+# Maximum GITHUB_TOKEN grant for this workflow_call graph: the release job
+# runs `gh release create` and github_release lanes upload assets. Declared
+# here so a caller that omits `permissions:` (org default token is often
+# read-only) still releases instead of 403ing.
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -121,7 +128,13 @@ jobs:
   build:
     name: Build
     needs: [prepare, release]
-    uses: CepheusLabs/cepheus-build/.github/workflows/app-build.yml@main
+    # Same-repo relative ref: GitHub resolves nested `./` references against
+    # the repo+commit of the workflow file containing this line, so whatever
+    # ref of app-release.yml a caller pins (`@main`, a test branch) brings the
+    # MATCHING app-build.yml with it — `toolkit-ref` then governs only the
+    # in-job CLI checkout. Expressions are not allowed in `uses:`, so a
+    # dynamic `@{toolkit-ref}` form is impossible by platform rule.
+    uses: ./.github/workflows/app-build.yml
     with:
       product: ${{ inputs.product }}
       toolkit-ref: ${{ inputs['toolkit-ref'] }}
@@ -186,11 +199,14 @@ jobs:
             echo "publish: no enabled linux-host store lanes for $PRODUCT; nothing to do."
             exit 0
           fi
-          for lane in $lanes; do
+          # Line-wise read, not word-splitting: lane names are TOML keys and
+          # may legally contain spaces.
+          while IFS= read -r lane; do
+            [ -z "$lane" ] && continue
             echo "::group::deploy $lane (dry-run)"
             "$PYTHON_BIN" .cepheus-build/bin/cepheus-build deploy \
               --product "$PRODUCT" \
               --repo-root "$GITHUB_WORKSPACE" \
               "$lane" --dry-run
             echo "::endgroup::"
-          done
+          done <<< "$lanes"
