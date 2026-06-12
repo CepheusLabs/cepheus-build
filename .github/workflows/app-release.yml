@@ -33,7 +33,9 @@ on:
       runner-profile:
         description: Runner profile for the build matrix.
         required: false
-        default: self-hosted
+        # hybrid = self-hosted linux/windows + GitHub-hosted macOS (no org
+        # mac runner is online yet; see build.toml runner_profiles).
+        default: hybrid
         type: string
       planner-runner-json:
         description: JSON runs-on value for the planning/control jobs.

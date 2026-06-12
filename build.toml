@@ -15,6 +15,17 @@ linux = ["self-hosted", "linux"]
 macos = ["self-hosted", "macos"]
 windows = ["self-hosted", "windows"]
 
+# Self-hosted where the fleet exists (errai linux; Windows VM once its agent
+# lands), GitHub-hosted for macOS: no org mac runner is online, and hosted
+# macs cover release CI now (mind the 10x minute multiplier on private
+# repos). The release workflow defaults to this profile.
+[github.runner_profiles.hybrid]
+label = "Self-hosted + GitHub macOS"
+planner = ["self-hosted", "linux"]
+linux = ["self-hosted", "linux"]
+macos = "macos-latest"
+windows = ["self-hosted", "windows"]
+
 # ── Container / VM execution backend (build any OS from any host) ─────────────
 # Used by `cepheus-build build ... --execution-mode container`. Each host key
 # names where that OS's targets build. `kind = "docker"` runs a Linux build
