@@ -23,6 +23,8 @@ def test_app_build_default_rust_version_matches_runner_image() -> None:
 
     assert "rust-toolchain:" in workflow
     assert "default: '1.95.0'" in workflow
+    assert "Configure writable Rustup home" in workflow
+    assert "RUSTUP_HOME=$HOME/.rustup" in workflow
     assert "toolchain: ${{ inputs['rust-toolchain'] }}" in workflow
 
 
