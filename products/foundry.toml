@@ -245,5 +245,5 @@ hosts = ["linux"]
 cwd = "."
 required_env = ["GITHUB_TOKEN"]
 commands = [
-  'gh release upload "v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER" target/x86_64-unknown-linux-gnu/release/foundry target/aarch64-apple-darwin/release/foundry target/x86_64-pc-windows-msvc/release/foundry.exe target/foundry-mcu/*/* target/foundry-os/manta-m8p-cm4/package/* target/foundry-os/manta-m8p-cm4/update-bundle/* --clobber',
+  'bash "$CBUILD_TOOL_ROOT/scripts/upload-release.sh" "v$CBUILD_VERSION-$CBUILD_BUILD_NUMBER" "target/x86_64-unknown-linux-gnu/release/foundry" "target/aarch64-apple-darwin/release/foundry" "target/x86_64-pc-windows-msvc/release/foundry.exe" "target/foundry-mcu/*/*" "target/foundry-os/manta-m8p-cm4/package/*" "target/foundry-os/manta-m8p-cm4/update-bundle/*"',
 ]

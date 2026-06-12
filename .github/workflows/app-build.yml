@@ -69,7 +69,7 @@ on:
       rust-toolchain:
         description: Rust toolchain for dtolnay/rust-toolchain.
         required: false
-        default: stable
+        default: '1.95.0'
         type: string
       setup-go:
         description: Install Go when a matrix row uses go.
@@ -157,6 +157,16 @@ on:
       R2_SECRET_ACCESS_KEY:
         required: false
       R2_BUCKET:
+        required: false
+      # Android — Play upload keystore materialized into android/key.properties
+      # only for Android matrix rows. All four must be present when any one is.
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
         required: false
 
 # Opt into the Node 24 actions runtime now (GitHub forces it June 2026). The
@@ -351,6 +361,64 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Materialize Android release keystore
+        if: ${{ matrix.setup_flutter }}
+        shell: bash
+        env:
+          PRODUCT: ${{ inputs.product }}
+          MATRIX_TARGETS: ${{ matrix.targets }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          case " ${MATRIX_TARGETS:-} " in
+            *" android "*) ;;
+            *)
+              echo "android signing: matrix row has no android target; skipping."
+              exit 0
+              ;;
+          esac
+
+          configured=0
+          missing=()
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -n "${!name:-}" ]; then
+              configured=1
+            else
+              missing+=("$name")
+            fi
+          done
+          if [ "$configured" -eq 0 ]; then
+            echo "android signing: secrets are unset; leaving product fallback behavior in place."
+            exit 0
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Android signing is partially configured; missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          PYTHON_BIN="$(command -v python3 || command -v python)"
+          app_dir="$("$PYTHON_BIN" -c 'from pathlib import Path; import os, tomllib; product = os.environ["PRODUCT"]; data = tomllib.loads((Path(".cepheus-build/products") / f"{product}.toml").read_text()); print(data.get("product", {}).get("app_dir", "."))')"
+          android_dir="$GITHUB_WORKSPACE/$app_dir/android"
+          if [ ! -d "$android_dir" ]; then
+            echo "::warning::android signing: $android_dir does not exist; skipping."
+            exit 0
+          fi
+
+          keystore_file="$android_dir/upload-keystore.jks"
+          key_properties_file="$android_dir/key.properties"
+          KEYSTORE_FILE="$keystore_file" "$PYTHON_BIN" -c 'import base64, os; from pathlib import Path; payload = "".join(os.environ["ANDROID_KEYSTORE_BASE64"].split()); Path(os.environ["KEYSTORE_FILE"]).write_bytes(base64.b64decode(payload, validate=True))'
+          {
+            printf 'storeFile=upload-keystore.jks\n'
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > "$key_properties_file"
+          chmod 600 "$keystore_file" "$key_properties_file" || true
+          echo "android signing: wrote android/key.properties for $PRODUCT."
 
       - name: Build
         shell: bash

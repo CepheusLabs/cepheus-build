@@ -27,6 +27,21 @@ python3 -m cepheus_build.deploy.google_play \
 The service account needs Android Publisher API access and permission on the
 Play Console app.
 
+Android release builds need a Play upload keystore before the `.aab` exists.
+The reusable GitHub workflow materializes this only for Android matrix rows
+when all four optional secrets are present:
+
+- `ANDROID_KEYSTORE_BASE64` — base64 of the upload `.jks`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+The job writes `android/upload-keystore.jks` and `android/key.properties`
+inside the product app directory, then lets the product's Gradle config consume
+the standard `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`
+properties. If none of the four secrets are present the step skips; if only
+some are present it fails before building.
+
 ## Microsoft Store
 
 Build a signed `.msix`, then deploy with:
