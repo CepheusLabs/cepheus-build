@@ -74,7 +74,7 @@ on:
       go-version:
         description: Go version for actions/setup-go.
         required: false
-        default: '1.22'
+        default: '1.26.4'
         type: string
       setup-buildroot-deps:
         description: Install Linux packages needed by Buildroot when a matrix row uses buildroot.
