@@ -288,6 +288,9 @@ jobs:
           if command -v go >/dev/null 2>&1; then
             go env -w GOPRIVATE=github.com/cepheuslabs/*,github.com/CepheusLabs/*
           fi
+          if command -v cargo >/dev/null 2>&1; then
+            cargo config set --global net.git-fetch-with-cli true
+          fi
 
       - name: Set up Flutter
         if: ${{ inputs['setup-flutter'] && matrix.setup_flutter }}

@@ -34,6 +34,7 @@ def test_app_build_exports_git_auth_for_child_package_fetches() -> None:
     assert "GIT_CONFIG_COUNT=2" in workflow
     assert "GIT_ASKPASS=$RUNNER_TEMP/git-askpass.sh" in workflow
     assert "GIT_TERMINAL_PROMPT=0" in workflow
+    assert "cargo config set --global net.git-fetch-with-cli true" in workflow
 
 
 def test_reusable_workflows_allow_product_submodule_policy() -> None:
