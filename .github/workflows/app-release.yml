@@ -45,6 +45,11 @@ on:
         required: false
         default: release
         type: string
+      checkout-submodules:
+        description: Product checkout submodule policy for actions/checkout (false, true, or recursive).
+        required: false
+        default: recursive
+        type: string
 
 # Maximum GITHUB_TOKEN grant for this workflow_call graph: the release job
 # runs `gh release create` and github_release lanes upload assets. Declared
@@ -156,6 +161,7 @@ jobs:
       targets: ${{ inputs.targets }}
       runner-profile: ${{ inputs['runner-profile'] }}
       planner-runner-json: ${{ inputs['planner-runner-json'] }}
+      checkout-submodules: ${{ inputs['checkout-submodules'] }}
       version: ${{ needs.prepare.outputs.version }}
       build-number: ${{ needs.prepare.outputs.build_number }}
       channel: ${{ needs.prepare.outputs.channel }}
@@ -174,7 +180,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-          submodules: recursive
+          submodules: ${{ inputs['checkout-submodules'] }}
 
       - name: Checkout build toolkit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

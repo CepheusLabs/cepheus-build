@@ -101,6 +101,11 @@ on:
         required: false
         default: ''
         type: string
+      checkout-submodules:
+        description: Product checkout submodule policy for actions/checkout (false, true, or recursive).
+        required: false
+        default: recursive
+        type: string
     # Code-signing credentials. ALL optional: when a secret is unset the
     # packaging scripts fall back to an unsigned artifact + warning (see
     # scripts/sign-windows.ps1 and scripts/sign-linux-gpg.sh). The caller passes
@@ -185,7 +190,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-          submodules: recursive
+          submodules: ${{ inputs['checkout-submodules'] }}
 
       - name: Checkout build toolkit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -242,7 +247,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-          submodules: recursive
+          submodules: ${{ inputs['checkout-submodules'] }}
 
       - name: Checkout build toolkit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

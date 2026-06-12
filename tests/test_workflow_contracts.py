@@ -34,6 +34,17 @@ def test_app_build_exports_git_auth_for_child_package_fetches() -> None:
     assert "GIT_TERMINAL_PROMPT=0" in workflow
 
 
+def test_reusable_workflows_allow_product_submodule_policy() -> None:
+    app_build = Path(".github/workflows/app-build.yml").read_text()
+    app_release = Path(".github/workflows/app-release.yml").read_text()
+
+    assert "checkout-submodules:" in app_build
+    assert "submodules: ${{ inputs['checkout-submodules'] }}" in app_build
+    assert "checkout-submodules:" in app_release
+    assert "checkout-submodules: ${{ inputs['checkout-submodules'] }}" in app_release
+    assert "submodules: ${{ inputs['checkout-submodules'] }}" in app_release
+
+
 def test_app_build_materializes_android_signing_only_for_android_rows() -> None:
     workflow = Path(".github/workflows/app-build.yml").read_text()
 
