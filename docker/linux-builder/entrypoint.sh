@@ -12,15 +12,22 @@ export PATH="/usr/sbin:/sbin:${PATH}"
 # regenerates them, which makes every dispatch host's known_hosts entry a
 # CHANGED key (accept-new rightly refuses). Generated once into the mounted
 # volume, then reused.
-mkdir -p /etc/ssh/persistent
+# ssh-keygen -A -f <prefix> writes under <prefix>/etc/ssh and does NOT create
+# the directories itself.
+mkdir -p /etc/ssh/persistent/etc/ssh
 if ! ls /etc/ssh/persistent/ssh_host_*_key >/dev/null 2>&1; then
   ssh-keygen -A -f /etc/ssh/persistent >/dev/null
-  mv /etc/ssh/persistent/etc/ssh/ssh_host_* /etc/ssh/persistent/ 2>/dev/null || true
-  rm -rf /etc/ssh/persistent/etc
+  mv /etc/ssh/persistent/etc/ssh/ssh_host_* /etc/ssh/persistent/
 fi
-for key in /etc/ssh/persistent/ssh_host_*_key; do
-  echo "HostKey $key"
-done > /etc/ssh/sshd_config.d/10-persistent-hostkeys.conf
+rm -rf /etc/ssh/persistent/etc
+shopt -s nullglob
+keyfiles=(/etc/ssh/persistent/ssh_host_*_key)
+shopt -u nullglob
+if [ "${#keyfiles[@]}" -eq 0 ]; then
+  echo "builder-entrypoint: FATAL: no persistent host keys materialized" >&2
+  exit 1
+fi
+printf 'HostKey %s\n' "${keyfiles[@]}" > /etc/ssh/sshd_config.d/10-persistent-hostkeys.conf
 
 # The root-owned /opt/flutter triggers git's dubious-ownership guard for the
 # builder user (the base image whitelists it only for root).
