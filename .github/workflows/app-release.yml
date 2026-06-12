@@ -119,7 +119,21 @@ jobs:
             echo "release: $TAG already exists (re-run); leaving it as-is."
             exit 0
           fi
-          args=(--verify-tag --title "$TAG" --notes-from-tag)
+          args=(--verify-tag --title "$TAG")
+          # --notes-from-tag needs a local clone (gh rejects it with -R) and
+          # this job never checks out. Pull the annotation via the API; fall
+          # back to API-generated notes for lightweight/unannotated tags.
+          tag_type=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" -q .object.type 2>/dev/null || true)
+          notes=""
+          if [ "$tag_type" = "tag" ]; then
+            tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" -q .object.sha)
+            notes=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" -q .message 2>/dev/null || true)
+          fi
+          if [ -n "$notes" ]; then
+            args+=(--notes "$notes")
+          else
+            args+=(--generate-notes)
+          fi
           if [ "$CHANNEL" = "beta" ]; then
             args+=(--prerelease)
           fi
