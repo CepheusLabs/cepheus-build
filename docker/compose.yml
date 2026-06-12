@@ -55,6 +55,26 @@ services:
     stop_grace_period: 2m
     restart: unless-stopped
 
+  # Persistent ssh-able Linux builder: lets dispatch hosts run the LINUX leg
+  # on this pool via the same ssh transport as the VMs (no local docker
+  # needed). Used by [container_profiles.errai] in build.toml. Drop the
+  # dispatch hosts' public keys at ./linux-builder/authorized_keys
+  # (git-ignored) before `up`.
+  linux-builder:
+    build:
+      context: ./linux-builder
+    image: cepheus-build-linux-builder:latest
+    container_name: cbuild-linux-builder
+    ports:
+      - "${CBUILD_VM_BIND:-0.0.0.0}:2522:22"
+    volumes:
+      - ./linux-builder/authorized_keys:/authorized_keys:ro
+      - ~/cepheus-build:/opt/cepheus-build:ro
+      - cbuild-builder-pub:/home/builder/.pub-cache
+      - cbuild-builder-cargo:/home/builder/.cargo/registry
+      - cbuild-builder-gomod:/home/builder/go/pkg/mod
+    restart: unless-stopped
+
   macos:
     image: dockurr/macos
     container_name: cbuild-macos
@@ -79,3 +99,6 @@ services:
 volumes:
   cbuild-windows:
   cbuild-macos:
+  cbuild-builder-pub:
+  cbuild-builder-cargo:
+  cbuild-builder-gomod:

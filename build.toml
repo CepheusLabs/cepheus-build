@@ -39,6 +39,20 @@ linux = { kind = "docker", image = "ghcr.io/cepheuslabs/cepheus-build-linux:late
 windows = { kind = "ssh", host = "192.168.0.98", port = 2322, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "powershell" }
 macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "posix" }
 
+# Everything-on-errai profile: identical to default except the LINUX leg also
+# runs on the pool via the ssh-able builder container (compose service
+# linux-builder, port 2522) -- no docker engine needed on the dispatch host.
+[container_profiles.errai]
+label = "Everything on errai"
+linux = { kind = "ssh", host = "192.168.0.98", port = 2522, user = "builder", remote_root = "~/cbuild", launcher = "/opt/cepheus-build/bin/cepheus-build", shell = "posix" }
+windows = { kind = "ssh", host = "192.168.0.98", port = 2322, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "powershell" }
+macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "posix" }
+
+[container_profiles.errai.compose]
+host = "192.168.0.98"
+user = "errai"
+dir = "~/cepheus-build/docker"
+
 # Where the VM pool's docker daemon lives (the bare-metal KVM host). `vm up/
 # down/status` ssh there and run docker compose inside `dir` -- the docker/
 # directory of a cepheus-build checkout on that host. Drop `host` (or the
