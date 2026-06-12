@@ -232,8 +232,10 @@ Sizes: S < 0.5 day, M = 0.5–2 days, L = 2–5 days. Tasks within a phase are p
 
 ## 7. Open questions for the owner
 
-1. **DNS (blocks Phase 0.4, which gates Phase 3):** Is the `printdeck.app` zone already on Cloudflare DNS? If not, approve migrating it (R2 custom domains require it; errai's Let's Encrypt setup needs a DNS-01/origin-cert check during the move).
-2. **Azure Trusted Signing (blocks signed direct-download Windows + Windows auto-update GA):** Does the Cepheus Labs LLC entity pass eligibility (US/CA/EU/UK + the 3-year-history rule)? If ineligible or stalled, approve buying an OV Authenticode cert (~$200–500/yr) as the fallback?
-3. **macOS runner hardware (blocks Phase 1.4 posture):** Buy a used Mac mini (~$500) now and skip the dockur macOS VM for signing entirely, or accept the EULA-violating VM as a documented interim with migration before GA? (All tooling is identical either way.)
-4. **GitHub org plan + admin PAT:** Confirm the org's plan (Free vs Team — affects only a future isolated signing runner group) and approve minting the org-admin PAT for ephemeral runner registration (lives only in errai's root-readable `.env.runner`).
-5. **Google Play account type (blocks first production release, not the build):** Is the Play developer account registered as an **organization** (exempt from the 14-day/12-tester closed-test requirement)? If personal, the closed-test clock should start during Phase 0.
+**ANSWERED 2026-06-12:**
+
+1. **DNS:** printdeck.app is already on Cloudflare DNS. Phase 3 (R2 + custom domains) is unblocked; first step is an R2 bucket + API token.
+2. **Windows signing:** pursue **Azure Trusted Signing** (onboarding runbook to be drafted); OV cert remains the fallback if eligibility fails. MS Store MSIX needs neither.
+3. **macOS hardware:** the dockur macOS VM serves as a **documented interim** for signing/CI; migrate to Apple hardware before GA (caveat stands in cross-os-builds.md).
+4. **Runner PAT:** errai's gh token (CepheusLabs account) mints registration tokens; in production at /media/cl-webapp/printdeck/.env.runner.
+5. **Google Play:** the developer account is an **organization** — no closed-test gate; production publishing unblocks once the android keystore + Play service account exist (Phase 0).
