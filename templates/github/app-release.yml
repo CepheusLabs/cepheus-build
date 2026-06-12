@@ -13,7 +13,7 @@ permissions:
   contents: write   # gh release create + asset upload
 
 concurrency:
-  group: release    # serialize releases; never cancel an in-flight one
+  group: release-${{ github.repository }}    # serialize releases per repo; never cancel an in-flight one
 
 jobs:
   release:
