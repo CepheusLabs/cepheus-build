@@ -245,6 +245,25 @@ jobs:
           if [ -n "${CEPHEUS_READ_TOKEN:-}" ]; then
             git config --global url."https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
             git config --global url."https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/".insteadOf "git@github.com:"
+            cat > "$RUNNER_TEMP/git-askpass.sh" <<'SH'
+          #!/usr/bin/env sh
+          case "$1" in
+            *Username*) printf '%s\n' "${GIT_USERNAME:-x-access-token}" ;;
+            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
+          esac
+          SH
+            chmod 700 "$RUNNER_TEMP/git-askpass.sh"
+            {
+              echo "GIT_CONFIG_COUNT=2"
+              echo "GIT_CONFIG_KEY_0=url.https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/.insteadOf"
+              echo "GIT_CONFIG_VALUE_0=https://github.com/"
+              echo "GIT_CONFIG_KEY_1=url.https://x-access-token:${CEPHEUS_READ_TOKEN}@github.com/.insteadOf"
+              echo "GIT_CONFIG_VALUE_1=git@github.com:"
+              echo "GIT_ASKPASS=$RUNNER_TEMP/git-askpass.sh"
+              echo "GIT_TERMINAL_PROMPT=0"
+              echo "GIT_USERNAME=x-access-token"
+              echo "GIT_PASSWORD=$CEPHEUS_READ_TOKEN"
+            } >> "$GITHUB_ENV"
           fi
           if command -v go >/dev/null 2>&1; then
             go env -w GOPRIVATE=github.com/cepheuslabs/*,github.com/CepheusLabs/*
