@@ -195,9 +195,10 @@ jobs:
         with:
           pattern: ${{ inputs.product }}-*
           path: ${{ runner.temp }}/release-assets
-          # Flatten all matrix rows together; per-OS filenames are distinct
-          # (dmg/exe/AppImage/...), so collisions across rows are not expected.
-          merge-multiple: true
+          # Keep one directory per matrix-row artifact: the attach step
+          # decides per artifact whether its contents are installers (upload
+          # as-is) or a raw tree like a Flutter bundle (archive first).
+          merge-multiple: false
 
       - name: Attach build artifacts to the release
         shell: bash
@@ -207,14 +208,40 @@ jobs:
           ASSETS_DIR: ${{ runner.temp }}/release-assets
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(find "$ASSETS_DIR" -type f -size +0c -print0)
-          if [ "${#files[@]}" -eq 0 ]; then
+          shopt -s nullglob
+          cd "$ASSETS_DIR"
+          uploads=()
+          for artifact_dir in */; do
+            name="${artifact_dir%/}"
+            # Installer-like files at any depth upload as-is; anything else
+            # (e.g. a Flutter bundle tree of loose .so/fonts) means the whole
+            # artifact ships as ONE versioned archive instead of loose files.
+            mapfile -d '' installers < <(find "$name" -type f \( \
+              -name '*.dmg' -o -name '*.pkg' -o -name '*.exe' -o -name '*.msix' \
+              -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+              -o -name '*.flatpak' -o -name '*.apk' -o -name '*.aab' \
+              -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.tar.xz' \) -print0)
+            other_count=$(find "$name" -type f ! \( \
+              -name '*.dmg' -o -name '*.pkg' -o -name '*.exe' -o -name '*.msix' \
+              -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+              -o -name '*.flatpak' -o -name '*.apk' -o -name '*.aab' \
+              -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.tar.xz' \) | wc -l)
+            if [ "$other_count" -gt 0 ]; then
+              archive="${name}-${TAG}.tar.gz"
+              tar -C "$name" -czf "$archive" .
+              uploads+=("$archive")
+              echo "publish: archived $name ($other_count non-installer file(s)) -> $archive"
+            else
+              uploads+=("${installers[@]}")
+            fi
+          done
+          if [ "${#uploads[@]}" -eq 0 ]; then
             echo "publish: no build artifacts to attach to $TAG."
             exit 0
           fi
           # --clobber keeps re-dispatches idempotent.
-          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "${files[@]}"
-          echo "publish: attached ${#files[@]} asset(s) to $TAG."
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
+          echo "publish: attached ${#uploads[@]} asset(s) to $TAG."
 
       - name: Deploy enabled lanes (dry-run)
         shell: bash
