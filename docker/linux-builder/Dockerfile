@@ -11,7 +11,12 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends openssh-server; \
     rm -rf /var/lib/apt/lists/*; \
     mkdir -p /run/sshd; \
-    useradd -m -d /home/builder -s /bin/bash builder
+    useradd -m -d /home/builder -s /bin/bash builder; \
+    # Flutter SDK group-writability happens HERE, once: in the entrypoint it
+    # forced an overlayfs copy-up of the whole ~3GB SDK on every container
+    # recreate (minutes of silent boot delay).
+    chgrp -R builder /opt/flutter; \
+    chmod -R g+w /opt/flutter
 
 COPY entrypoint.sh /usr/local/bin/builder-entrypoint.sh
 RUN chmod +x /usr/local/bin/builder-entrypoint.sh
