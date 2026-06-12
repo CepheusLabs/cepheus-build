@@ -11,7 +11,10 @@
 # Required env (from .env.runner — see README.md):
 #   GH_RUNNER_PAT       org-admin PAT (scope: admin:org). Used ONLY to mint
 #                       short-lived registration/removal tokens via the GitHub
-#                       API; never written to disk, never passed to jobs.
+#                       API; never written to disk. Moved into an UNEXPORTED
+#                       shell variable at the start of the runner phase, so no
+#                       child process — config.sh, run.sh, and therefore no
+#                       workflow job step — ever inherits it.
 # Optional env:
 #   RUNNER_ORG          GitHub org (default: CepheusLabs)
 #   RUNNER_LABELS       comma-separated labels (default: self-hosted,linux)
@@ -19,6 +22,11 @@
 #                       container hostname is appended for uniqueness
 #   RUNNER_GROUP        runner group (default: Default)
 #   RUNNER_RETRY_DELAY  seconds between loop iterations (default: 5)
+#   RUNNER_MAX_REGISTER_FAILURES
+#                       consecutive registration failures before exiting 1
+#                       instead of spinning forever (default: 12; an expired/
+#                       revoked PAT trips this — the compose restart policy
+#                       and fleet monitoring take it from there)
 set -euo pipefail
 
 ORG="${RUNNER_ORG:-CepheusLabs}"
@@ -60,10 +68,18 @@ fi
 # ── Runner phase: register-ephemeral / run / repeat ──────────────────────────
 cd "$RUNNER_DIR"
 
+# Secret hygiene (HIGH): hold the PAT in an UNEXPORTED shell variable and drop
+# it from the exported environment before anything else runs, so no child
+# process — config.sh, run.sh, and therefore no workflow job step — ever
+# inherits it. Only the per-call `GH_TOKEN=...` prefix on `gh api` sees it;
+# the EXIT cleanup still reaches it through this shell variable.
+pat="$GH_RUNNER_PAT"
+unset GH_RUNNER_PAT
+
 fetch_token() {
   # $1: registration-token | remove-token
   # POST /orgs/{org}/actions/runners/{registration-token|remove-token}
-  GH_TOKEN="$GH_RUNNER_PAT" gh api -X POST "orgs/${ORG}/actions/runners/$1" --jq .token
+  GH_TOKEN="$pat" gh api -X POST "orgs/${ORG}/actions/runners/$1" --jq .token
 }
 
 shutdown=0
@@ -86,15 +102,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Bounded registration retries: transient API/network blips ride through, but
+# a persistent failure (expired/revoked PAT) exits 1 instead of spinning.
+failures=0
+max_failures="${RUNNER_MAX_REGISTER_FAILURES:-12}"
+register_failed() {
+  failures=$((failures + 1))
+  if [ "$failures" -ge "$max_failures" ]; then
+    echo "fatal: ${failures} consecutive registration failures (expired/revoked GH_RUNNER_PAT? org unreachable?); giving up." >&2
+    exit 1
+  fi
+  echo "entrypoint: registration failed (${failures}/${max_failures}); retrying in ${RETRY_DELAY}s" >&2
+  sleep "${RETRY_DELAY}"
+}
+
 while [ "$shutdown" -eq 0 ]; do
   # An ephemeral runner's server-side registration is consumed by its one job;
   # drop the stale local credentials before re-configuring.
   rm -f .runner .credentials .credentials_rsaparams
 
   echo "entrypoint: registering ephemeral runner ${NAME} (org: ${ORG}, labels: ${LABELS})"
+  if ! reg_token="$(fetch_token registration-token)"; then
+    register_failed
+    continue
+  fi
   if ! ./config.sh \
       --url "https://github.com/${ORG}" \
-      --token "$(fetch_token registration-token)" \
+      --token "$reg_token" \
       --name "${NAME}" \
       --runnergroup "${GROUP}" \
       --no-default-labels \
@@ -103,9 +137,15 @@ while [ "$shutdown" -eq 0 ]; do
       --ephemeral \
       --unattended \
       --replace; then
-    echo "entrypoint: registration failed; retrying in ${RETRY_DELAY}s" >&2
-    sleep "${RETRY_DELAY}"
+    register_failed
     continue
+  fi
+  failures=0
+
+  # A SIGTERM that landed during registration must not start a job: bail out
+  # here and let the EXIT cleanup remove the registration just created.
+  if [ "$shutdown" -ne 0 ]; then
+    break
   fi
 
   # Background + wait so the TERM/INT trap can forward the signal to run.sh
