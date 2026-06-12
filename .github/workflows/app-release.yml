@@ -168,11 +168,12 @@ jobs:
     secrets: inherit
 
   publish:
-    # Store-lane deploys. DRY-RUN for now: validates lane wiring (config,
-    # command rendering, channel plumbing) on every release without touching
-    # stores. Real uploads (artifact download + CBUILD_ARTIFACTS_DIR handoff +
-    # per-host deploy matrix) land in later plan phases (2.3/3/4).
-    name: Publish store lanes (dry-run)
+    # Release-asset upload + store-lane validation. The build matrix's
+    # workflow artifacts are attached to the GitHub Release (the internal
+    # archival mirror, locked decision L2). Store lanes still run DRY-RUN:
+    # real store uploads (per-host deploy matrix, store secrets) land in
+    # later plan phases (3/4).
+    name: Publish (release assets + lane dry-run)
     needs: [prepare, build]
     runs-on: ${{ fromJSON(inputs['planner-runner-json']) }}
     steps:
@@ -188,6 +189,32 @@ jobs:
           repository: CepheusLabs/cepheus-build
           ref: ${{ inputs['toolkit-ref'] }}
           path: .cepheus-build
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          pattern: ${{ inputs.product }}-*
+          path: ${{ runner.temp }}/release-assets
+          # Flatten all matrix rows together; per-OS filenames are distinct
+          # (dmg/exe/AppImage/...), so collisions across rows are not expected.
+          merge-multiple: true
+
+      - name: Attach build artifacts to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          ASSETS_DIR: ${{ runner.temp }}/release-assets
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find "$ASSETS_DIR" -type f -size +0c -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "publish: no build artifacts to attach to $TAG."
+            exit 0
+          fi
+          # --clobber keeps re-dispatches idempotent.
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          echo "publish: attached ${#files[@]} asset(s) to $TAG."
 
       - name: Deploy enabled lanes (dry-run)
         shell: bash
