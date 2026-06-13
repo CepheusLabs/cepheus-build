@@ -10,6 +10,9 @@ bin/* text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 Dockerfile text eol=lf
+# versions.env is `source`d by provision.sh inside the macOS VM; a CRLF copy
+# would append \r to every pin (e.g. a broken go${VER}\r download URL).
+docker/versions.env text eol=lf
 
 # Windows-native scripts: CRLF on every platform (cmd.exe mis-parses labels
 # and multi-line blocks in LF batch files; the oem dir is mounted from the

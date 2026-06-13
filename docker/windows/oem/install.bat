@@ -17,6 +17,16 @@ REM path in build.toml [container_profiles.default.windows].toolkit).
 REM ===========================================================================
 echo [cepheus] provisioning Windows build VM...
 
+REM --- Toolchain pins -------------------------------------------------------
+REM Keep these in sync with docker\versions.env — CI asserts it
+REM (tests/test_provisioning_pins.py). Re-declared here rather than parsed
+REM because the oem dir dockur copies in does not include the sibling
+REM versions.env, and a hardcoded `set` is the most robust batch form.
+set "CBUILD_FLUTTER_VERSION=3.41.7"
+set "CBUILD_GO_VERSION=1.26.4"
+set "CBUILD_RUST_VERSION=1.95.0"
+set "CBUILD_PYTHON_VERSION=3.12"
+
 REM --- OpenSSH Server -------------------------------------------------------
 powershell -NoProfile -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"
 powershell -NoProfile -Command "Set-Service -Name sshd -StartupType Automatic; Start-Service sshd"
@@ -54,11 +64,53 @@ REM mingw provides windres, used by bash-based sidecar builds (deckhand) to
 REM embed Go .syso resources into the Windows exe.
 REM Flutter is NOT installed via choco (that pulls LATEST and drifts ahead of
 REM the rest of the pool) -- it is git-cloned at the pinned tag below.
-REM golang: products with a Go sidecar/helper (deckhand) build it on Windows.
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja mingw golang --installargs "ADD_CMAKE_TO_PATH=System"
+REM golang/rust are pinned and installed SEPARATELY below (a per-package
+REM --version on the bulk line corrupts it: choco applies --version to every
+REM package). python3 is pinned via --version to %CBUILD_PYTHON_VERSION%.
+REM TODO(pin): mingw/cmake/ninja still float to choco latest; pin them with
+REM --version once a known-good set is chosen (lower drift risk than the
+REM compilers, so left floating for now).
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git rsync pwsh cmake ninja mingw --installargs "ADD_CMAKE_TO_PATH=System"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
+)
+
+REM --- Python (PINNED) + pynacl --------------------------------------------
+REM A per-package --version must NOT ride the bulk line (choco would apply it
+REM to every package), so python3 installs on its own line.
+REM build.toml [tools.python3] check does `python -c "import nacl"`.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress python3 --version=%CBUILD_PYTHON_VERSION%
+if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
+    echo [cepheus] ERROR: python3 install failed with exit code %ERRORLEVEL%
+    exit /b %ERRORLEVEL%
+)
+call "%ProgramData%\chocolatey\bin\refreshenv.cmd" >nul 2>&1
+python -m pip install pynacl
+if %ERRORLEVEL% NEQ 0 (
+    echo [cepheus] WARNING: pip install pynacl failed -- the python3 tool check will fail.
+)
+
+REM --- Go (PINNED) ----------------------------------------------------------
+REM Products with a Go sidecar/helper (deckhand) build it on Windows. Pinned
+REM to %CBUILD_GO_VERSION% on its own line so it matches the rest of the pool.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress golang --version=%CBUILD_GO_VERSION%
+if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
+    echo [cepheus] ERROR: golang install failed with exit code %ERRORLEVEL%
+    exit /b %ERRORLEVEL%
+)
+
+REM --- Rust (PINNED via rustup) ---------------------------------------------
+REM anvil and colorwake-studio Windows targets run `cargo build`; without Rust
+REM here those lanes fail. rustup-init lands cargo/rustc at
+REM %USERPROFILE%\.cargo\bin, which augment_process_path already prepends.
+if not exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
+    powershell -NoProfile -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; (New-Object System.Net.WebClient).DownloadFile('https://win.rustup.rs/x86_64','%TEMP%\rustup-init.exe')"
+    "%TEMP%\rustup-init.exe" -y --default-toolchain %CBUILD_RUST_VERSION% --profile minimal
+    if %ERRORLEVEL% NEQ 0 (
+        echo [cepheus] ERROR: rustup-init failed with exit code %ERRORLEVEL%
+        exit /b %ERRORLEVEL%
+    )
 )
 
 REM --- Flutter (PINNED) + bash on the machine PATH ---------------------------
@@ -101,6 +153,23 @@ call "%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
 "%USERPROFILE%\vcpkg\vcpkg.exe" install openssl:x64-windows
 if %ERRORLEVEL% NEQ 0 (
     echo [cepheus] WARNING: vcpkg openssl install failed with %ERRORLEVEL% -- printdeck windows builds need it.
+)
+
+REM --- Presence asserts -----------------------------------------------------
+REM Warn (not fail) if a pinned toolchain did not land on a resolvable path;
+REM PATH changes from this session need the next sshd login to take effect, so
+REM probe the known install locations directly.
+where windres >nul 2>&1 || if not exist "C:\ProgramData\chocolatey\bin\windres.exe" (
+    echo [cepheus] WARNING: windres not found -- mingw missing; Go .syso resource builds will fail.
+)
+if not exist "C:\ProgramData\chocolatey\lib\golang\tools\go\bin\go.exe" if not exist "C:\Program Files\Go\bin\go.exe" (
+    echo [cepheus] WARNING: go.exe not found at the expected choco/Program Files paths.
+)
+if not exist "%USERPROFILE%\.cargo\bin\cargo.exe" (
+    echo [cepheus] WARNING: cargo not found -- anvil/colorwake-studio windows lanes need it.
+)
+if not exist "%USERPROFILE%\.cargo\bin\rustc.exe" (
+    echo [cepheus] WARNING: rustc not found at %USERPROFILE%\.cargo\bin.
 )
 
 echo [cepheus] provisioning complete.

@@ -9,6 +9,10 @@
 # Versions track the ecosystem standard (Go 1.26.x, Rust 1.95, Python 3.12).
 FROM ubuntu:24.04
 
+# These ARGs are the canonical pinned toolchain values. They MUST equal the
+# matching CBUILD_*_VERSION keys in docker/versions.env (the single source of
+# truth the macOS/Windows provisioners read) — CI asserts the match
+# (tests/test_provisioning_pins.py). Update both together.
 ARG GO_VERSION=1.26.4
 ARG RUST_VERSION=1.95.0
 # Tracks the dev machines (3.41.x stable): product Makefiles use flags that
