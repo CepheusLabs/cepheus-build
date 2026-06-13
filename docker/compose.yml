@@ -65,6 +65,11 @@ services:
       context: ./linux-builder
     image: cepheus-build-linux-builder:latest
     container_name: cbuild-linux-builder
+    # Resource limits: errai also runs the prod printdeck/warehouse stacks;
+    # never let a build starve them. Mirrors runner/compose.yml. Tune via env
+    # on the compose invocation.
+    cpus: "${CBUILD_BUILDER_CPUS:-4}"
+    mem_limit: "${CBUILD_BUILDER_MEM:-12g}"
     ports:
       - "${CBUILD_VM_BIND:-0.0.0.0}:2522:22"
     volumes:
