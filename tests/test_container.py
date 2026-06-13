@@ -434,6 +434,19 @@ class TestRsyncArgv:
         assert argv[-2] == "u@h:cbuild/demo/build/macos"
         assert argv[-1] == "build/"
 
+    def test_windows_push_uses_blocking_io(self):
+        # cwRsync receiver over Windows OpenSSH needs --blocking-io.
+        argv = container.rsync_push_argv("u@h:p", [], {"shell": "powershell"})
+        assert "--blocking-io" in argv
+
+    def test_posix_push_no_blocking_io(self):
+        argv = container.rsync_push_argv("u@h:p", [], {"shell": "posix"})
+        assert "--blocking-io" not in argv
+
+    def test_windows_pull_uses_blocking_io(self):
+        argv = container.rsync_pull_argv("u@h", "p", "build", [], {"shell": "powershell"})
+        assert "--blocking-io" in argv
+
     def test_pull_top_level_root_into_cwd(self):
         argv = container.rsync_pull_argv("u@h", "cbuild/demo", "dist", [])
         assert argv[-2] == "u@h:cbuild/demo/dist"

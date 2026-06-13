@@ -618,6 +618,25 @@ def _rsync_transport(endpoint: dict[str, Any], port_opts: list[str]) -> str:
     return " ".join([ssh_program, *port_opts, *SSH_BATCH_OPTS])
 
 
+def _rsync_base(endpoint: dict[str, Any] | None) -> list[str]:
+    """``rsync -az`` plus ``--blocking-io`` when the remote is a Windows VM.
+
+    cwRsync as the receiver over Windows OpenSSH intermittently fails with
+    ``safe_write failed ... Resource temporarily unavailable`` (EAGAIN on its
+    non-blocking socket); ``--blocking-io`` is the documented workaround. Keyed
+    on ``shell = "powershell"`` (the Windows endpoints) so Linux/macOS pulls
+    keep the faster default; an endpoint may force it with ``rsync_blocking_io``.
+    """
+    endpoint = endpoint or {}
+    blocking = endpoint.get("rsync_blocking_io")
+    if blocking is None:
+        blocking = str(endpoint.get("shell") or "").lower() == "powershell"
+    base = ["rsync", "-az"]
+    if blocking:
+        base.append("--blocking-io")
+    return base
+
+
 def rsync_push_argv(
     remote_spec: str, port_opts: list[str], endpoint: dict[str, Any] | None = None
 ) -> list[str]:
@@ -628,7 +647,7 @@ def rsync_push_argv(
     (``D:/...``) out of the argv, where rsync would parse the colon as a
     host separator.
     """
-    argv = ["rsync", "-az", "--delete", "-e", _rsync_transport(endpoint or {}, port_opts)]
+    argv = [*_rsync_base(endpoint), "--delete", "-e", _rsync_transport(endpoint or {}, port_opts)]
     for pattern in RSYNC_EXCLUDES:
         argv += ["--exclude", pattern]
     # Trailing slash on the source copies the contents into the destination dir.
@@ -660,8 +679,7 @@ def rsync_pull_argv(
     parent = _root_parent(root)
     destination_dir = f"{parent}/" if parent else "./"
     return [
-        "rsync",
-        "-az",
+        *_rsync_base(endpoint),
         "-e",
         _rsync_transport(endpoint or {}, port_opts),
         f"{destination}:{remote_path}/{root}",
