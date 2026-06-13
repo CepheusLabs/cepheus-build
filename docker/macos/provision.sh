@@ -17,6 +17,13 @@
 # large manual step: install it from the App Store (or `xcodes`), then run
 #   sudo xcodebuild -license accept
 #   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+#   sudo xcodebuild -downloadPlatform iOS   # iOS SDK ships SEPARATELY from Xcode
+#
+# The iOS platform is REQUIRED for any ios/ipa target and is NOT installed with
+# Xcode by default (Xcode ships only the macOS SDK). If the CLI download above
+# does not stick (it can fail silently headless), install it from the GUI:
+# Xcode > Settings > Components > download "iOS <version>". Verify with
+# `xcodebuild -showsdks | grep iphoneos`.
 #
 # Apple's macOS license permits virtualization only on Apple-branded hardware;
 # running this on non-Apple hardware is your call. Store signing/notarization
