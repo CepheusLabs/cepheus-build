@@ -49,6 +49,42 @@ jobs:
             pytest -q
           fi
 
+  provisioning:
+    name: Provisioning static checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # Syntax gate: a broken provisioner only fails at VM build time (slow,
+      # remote). `bash -n` catches it here in seconds.
+      - name: Bash syntax check
+        run: |
+          bash -n docker/macos/provision.sh \
+                  docker/linux-builder/entrypoint.sh \
+                  docker/runner/entrypoint.sh
+
+      # shellcheck at warning level: the provisioner scripts are clean at this
+      # severity today, so fail on warning to keep them that way. Drop to
+      # -S error only if a future intentional pattern proves too noisy.
+      - name: ShellCheck (warning-level)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning \
+            docker/macos/provision.sh \
+            docker/linux-builder/entrypoint.sh \
+            docker/runner/entrypoint.sh
+
+      # yamllint the compose files (relaxed: long lines/comments are fine; we
+      # mainly want structural validity + no tabs/duplicate keys).
+      - name: yamllint compose files
+        run: |
+          pip install yamllint
+          yamllint -d relaxed docker/compose.yml docker/runner/compose.yml
+
+      # The pin-lint pytest (tests/test_provisioning_pins.py) also runs in the
+      # `python` job above; it is the automated guard against toolchain drift.
+
   flutter:
     name: Flutter analyze & test
     runs-on: ubuntu-latest
