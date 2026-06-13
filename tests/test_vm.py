@@ -11,9 +11,20 @@ from cepheus_build.errors import BuildError
 
 WINDOWS_EP = {"kind": "ssh", "host": "192.168.0.98", "port": 2322, "user": "cbuild"}
 MACOS_EP = {"kind": "ssh", "host": "192.168.0.98", "port": 2422, "user": "cbuild"}
+LINUX_BUILDER_EP = {
+    "kind": "ssh", "host": "192.168.0.98", "port": 2522, "user": "builder",
+    "compose_service": "linux-builder",
+}
 PROFILE = {
     "label": "pool",
     "linux": {"kind": "docker", "image": "img"},
+    "windows": WINDOWS_EP,
+    "macos": MACOS_EP,
+    "compose": {"host": "192.168.0.98", "user": "errai", "dir": "~/cepheus-build/docker"},
+}
+ERRAI_PROFILE = {
+    "label": "errai",
+    "linux": LINUX_BUILDER_EP,
     "windows": WINDOWS_EP,
     "macos": MACOS_EP,
     "compose": {"host": "192.168.0.98", "user": "errai", "dir": "~/cepheus-build/docker"},
@@ -94,11 +105,24 @@ class TestSshEndpoints:
         endpoints = vm.ssh_endpoints(PROFILE)
         assert list(endpoints) == ["macos", "windows"]
 
+    def test_errai_profile_includes_ssh_linux(self):
+        # The errai profile's linux endpoint is kind=ssh (the builder), so it
+        # joins the pool; the default profile's docker linux does not.
+        assert list(vm.ssh_endpoints(ERRAI_PROFILE)) == ["linux", "macos", "windows"]
+
     def test_compose_table_is_not_an_endpoint(self):
         assert "compose" not in vm.ssh_endpoints(PROFILE)
 
     def test_endpoint_label(self):
         assert vm.endpoint_label(WINDOWS_EP) == "cbuild@192.168.0.98:2322"
+
+
+class TestComposeService:
+    def test_defaults_to_host_os(self):
+        assert vm.compose_service_for("windows", WINDOWS_EP) == "windows"
+
+    def test_override_used(self):
+        assert vm.compose_service_for("linux", LINUX_BUILDER_EP) == "linux-builder"
 
 
 # ---------------------------------------------------------------------------
@@ -250,3 +274,35 @@ class TestCmdVm:
         rc = vm.cmd_vm(_args(vm_action="status", dry_run=True))
         assert rc == 0
         assert fake_pool["probes"] == []
+
+    def test_unknown_service_raises(self, fake_pool):
+        with pytest.raises(BuildError, match="no ssh endpoint"):
+            vm.cmd_vm(_args(vm_action="up", services=["bogus"]))
+
+
+class TestCmdVmErrai:
+    @pytest.fixture(autouse=True)
+    def _errai(self, monkeypatch):
+        recorded: dict[str, object] = {"argv": []}
+        monkeypatch.setattr(vm, "container_profile_config", lambda name: ERRAI_PROFILE)
+        monkeypatch.setattr(vm, "default_profile_name", lambda: "errai")
+        monkeypatch.setattr(
+            vm, "run_argv",
+            lambda argv, cwd, env, dry_run=False, *, prefix="": recorded["argv"].append(list(argv)),
+        )
+        monkeypatch.setattr(vm, "probe_endpoint", lambda ep: (True, ""))
+        monkeypatch.setattr(vm, "wait_for_ssh", lambda endpoints, *, timeout, **k: None)
+        self.recorded = recorded
+
+    def test_up_uses_linux_builder_compose_service(self):
+        rc = vm.cmd_vm(_args(vm_action="up", container_profile="errai"))
+        assert rc == 0
+        remote = self.recorded["argv"][0][-1]
+        # host-OS key 'linux' maps to the linux-builder container, not a bare
+        # 'linux' service (which is the build-image stage).
+        assert "docker compose up -d linux-builder macos windows" in remote
+
+    def test_up_single_linux_maps_to_builder(self):
+        rc = vm.cmd_vm(_args(vm_action="up", container_profile="errai", services=["linux"]))
+        assert rc == 0
+        assert "docker compose up -d linux-builder" in self.recorded["argv"][0][-1]

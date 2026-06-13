@@ -67,8 +67,10 @@ chgrp -R builder /opt/flutter 2>/dev/null || true
 # shell- and interactivity-independent. NOTE: it is not shell-parsed -- the
 # full literal path list is required (no $PATH expansion).
 cat > /etc/environment <<'ENV'
-PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:/usr/local/go/bin:/home/builder/go/bin:/home/builder/.cargo/bin:/home/builder/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:/usr/local/go/bin:/home/builder/go/bin:/opt/rust/cargo/bin:/home/builder/.cargo/bin:/home/builder/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 GOWORK=off
+RUSTUP_HOME=/opt/rust/rustup
+CARGO_HOME=/home/builder/.cargo
 ENV
 
 exec /usr/sbin/sshd -D -e

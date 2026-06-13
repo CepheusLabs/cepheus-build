@@ -129,6 +129,17 @@ def ssh_endpoints(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return found
 
 
+def compose_service_for(host_os: str, endpoint: dict[str, Any]) -> str:
+    """The compose service name backing an endpoint's host OS.
+
+    Defaults to the host-OS key (the macOS/Windows dockur services are named
+    ``macos``/``windows``), but an endpoint can override it -- the errai
+    profile's linux endpoint maps to the ``linux-builder`` container, while a
+    bare ``linux`` service in compose.yml is the (different) build-image stage.
+    """
+    return str(endpoint.get("compose_service") or host_os)
+
+
 def endpoint_label(endpoint: dict[str, Any]) -> str:
     destination, port_opts = _ssh_base(endpoint, host_override=None)
     port = f":{port_opts[1]}" if port_opts else ""
@@ -190,7 +201,18 @@ def cmd_vm(args: argparse.Namespace) -> int:
         )
     compose_cfg = compose_cfg or {}
     endpoints = ssh_endpoints(profile)
-    services = list(getattr(args, "services", None) or endpoints)
+    # Selected host OSes (user types host-OS names: linux/macos/windows); each
+    # maps to its compose service name (which may differ, e.g. linux-builder).
+    selected = list(getattr(args, "services", None) or endpoints)
+    unknown = [s for s in selected if s not in endpoints]
+    if unknown:
+        known = ", ".join(endpoints) or "none"
+        raise BuildError(
+            f"profile '{profile_name}' has no ssh endpoint for: {', '.join(unknown)}. "
+            f"Known: {known}."
+        )
+    compose_services = [compose_service_for(h, endpoints[h]) for h in selected]
+    wait_targets = {h: endpoints[h] for h in selected}
     dry_run = getattr(args, "dry_run", False)
     env = dict(os.environ)
     action = args.vm_action
@@ -202,13 +224,8 @@ def cmd_vm(args: argparse.Namespace) -> int:
     )
 
     if action == "up":
-        argv, cwd = compose_argv(compose_cfg, ["up", "-d", *services])
+        argv, cwd = compose_argv(compose_cfg, ["up", "-d", *compose_services])
         run_argv(argv, cwd or TOOL_ROOT, env, dry_run)
-        wait_targets = {
-            host_os: endpoint
-            for host_os, endpoint in endpoints.items()
-            if host_os in services
-        }
         if getattr(args, "wait", True) and not dry_run and wait_targets:
             wait_for_ssh(wait_targets, timeout=getattr(args, "wait_timeout", 1200))
         return 0
@@ -218,19 +235,18 @@ def cmd_vm(args: argparse.Namespace) -> int:
         # survive, only the VMs power off. VM disks live in named volumes
         # either way; `docker compose down` on the KVM host is the manual
         # escalation when a container itself must be recreated.
-        argv, cwd = compose_argv(compose_cfg, ["stop", *services])
+        argv, cwd = compose_argv(compose_cfg, ["stop", *compose_services])
         run_argv(argv, cwd or TOOL_ROOT, env, dry_run)
         return 0
 
     if action == "status":
-        argv, cwd = compose_argv(compose_cfg, ["ps", *services])
+        argv, cwd = compose_argv(compose_cfg, ["ps", *compose_services])
         run_argv(argv, cwd or TOOL_ROOT, env, dry_run)
         if dry_run:
             return 0
         failures = 0
-        for host_os, endpoint in endpoints.items():
-            if host_os not in services:
-                continue
+        for host_os in selected:
+            endpoint = endpoints[host_os]
             ready, reason = probe_endpoint(endpoint)
             label = endpoint_label(endpoint)
             if ready:

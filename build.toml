@@ -44,7 +44,7 @@ macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", rem
 # linux-builder, port 2522) -- no docker engine needed on the dispatch host.
 [container_profiles.errai]
 label = "Everything on errai"
-linux = { kind = "ssh", host = "192.168.0.98", port = 2522, user = "builder", remote_root = "~/cbuild", launcher = "/opt/cepheus-build/bin/cepheus-build", shell = "posix" }
+linux = { kind = "ssh", host = "192.168.0.98", port = 2522, user = "builder", remote_root = "~/cbuild", launcher = "/opt/cepheus-build/bin/cepheus-build", shell = "posix", compose_service = "linux-builder" }
 windows = { kind = "ssh", host = "192.168.0.98", port = 2322, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "powershell" }
 macos = { kind = "ssh", host = "192.168.0.98", port = 2422, user = "cbuild", remote_root = "~/cbuild", toolkit = "~/cepheus-build", shell = "posix" }
 
