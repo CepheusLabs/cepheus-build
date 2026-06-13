@@ -771,6 +771,50 @@ class TestCmdContainerBuild:
         assert rc == 0
 
 
+class TestRunRsync:
+    def test_retries_transient_then_succeeds(self, monkeypatch, tmp_path):
+        import subprocess as sp
+        calls = {"n": 0}
+
+        def flaky(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise sp.CalledProcessError(12, "rsync")  # transient
+
+        monkeypatch.setattr(container, "run_argv", flaky)
+        monkeypatch.setattr(container.time, "sleep", lambda s: None)
+        container.run_rsync(["rsync"], tmp_path, {}, False, prefix="")
+        assert calls["n"] == 3
+
+    def test_nontransient_not_retried(self, monkeypatch, tmp_path):
+        import subprocess as sp
+        calls = {"n": 0}
+
+        def fail23(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
+            calls["n"] += 1
+            raise sp.CalledProcessError(23, "rsync")  # missing root, not transient
+
+        monkeypatch.setattr(container, "run_argv", fail23)
+        monkeypatch.setattr(container.time, "sleep", lambda s: None)
+        with pytest.raises(sp.CalledProcessError):
+            container.run_rsync(["rsync"], tmp_path, {}, False, prefix="")
+        assert calls["n"] == 1
+
+    def test_exhausts_attempts_then_raises(self, monkeypatch, tmp_path):
+        import subprocess as sp
+        calls = {"n": 0}
+
+        def always12(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
+            calls["n"] += 1
+            raise sp.CalledProcessError(12, "rsync")
+
+        monkeypatch.setattr(container, "run_argv", always12)
+        monkeypatch.setattr(container.time, "sleep", lambda s: None)
+        with pytest.raises(sp.CalledProcessError):
+            container.run_rsync(["rsync"], tmp_path, {}, False, prefix="")
+        assert calls["n"] == container.RSYNC_MAX_ATTEMPTS
+
+
 class TestParallelDispatch:
     def test_parallel_prefixes_per_host(self, tmp_path, monkeypatch):
         config = _three_host_config(tmp_path)

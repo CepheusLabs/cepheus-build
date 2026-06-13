@@ -40,6 +40,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -722,6 +723,33 @@ def run_docker_target(
     run_argv(argv, TOOL_ROOT, dict(os.environ), getattr(args, "dry_run", False), prefix=prefix)
 
 
+# Transient rsync exit codes worth retrying: socket I/O (10), file I/O (11),
+# protocol stream (12), and timeouts (30, 35). Under heavy host load a VM's
+# rsync hits EAGAIN ("Resource temporarily unavailable") -> code 12; rsync is
+# idempotent, so re-running the (whole-repo) transfer recovers. 23 (some files
+# vanished / a missing pull root) is NOT transient and is handled separately.
+RSYNC_TRANSIENT_CODES = frozenset({10, 11, 12, 30, 35})
+RSYNC_MAX_ATTEMPTS = 3
+
+
+def run_rsync(
+    argv: list[str], cwd: Path, env: dict[str, str], dry_run: bool, *, prefix: str
+) -> None:
+    """``run_argv`` for an rsync step, retrying transient I/O/protocol errors."""
+    for attempt in range(1, RSYNC_MAX_ATTEMPTS + 1):
+        try:
+            run_argv(argv, cwd, env, dry_run, prefix=prefix)
+            return
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode not in RSYNC_TRANSIENT_CODES or attempt == RSYNC_MAX_ATTEMPTS:
+                raise
+            locked_print(
+                f"{prefix}rsync transient error (exit {exc.returncode}); "
+                f"retry {attempt}/{RSYNC_MAX_ATTEMPTS - 1} after {2 * attempt}s..."
+            )
+            time.sleep(2 * attempt)
+
+
 def run_ssh_target(
     config: ProductConfig,
     host_os: str,
@@ -754,7 +782,7 @@ def run_ssh_target(
     #    cwd=repo_root: the rsync source is the literal ``./`` (see
     #    rsync_push_argv on why drive-letter paths must stay out of the argv).
     push = rsync_push_argv(f"{destination}:{remote_path}", port_opts, endpoint)
-    run_argv(push, config.repo_root, env, dry_run, prefix=prefix)
+    run_rsync(push, config.repo_root, env, dry_run, prefix=prefix)
 
     # 2. Run the build inside the VM. The remote command is ONE argv element,
     #    so no local shell ever re-parses it (reliable from native Windows
@@ -789,7 +817,7 @@ def run_ssh_target(
             (config.repo_root / parent).mkdir(parents=True, exist_ok=True)
         pull = rsync_pull_argv(destination, remote_path, root, port_opts, endpoint)
         try:
-            run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
+            run_rsync(pull, config.repo_root, env, dry_run, prefix=prefix)
         except subprocess.CalledProcessError as exc:
             if exc.returncode != 23:
                 raise
