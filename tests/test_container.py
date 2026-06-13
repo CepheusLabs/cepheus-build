@@ -426,11 +426,22 @@ class TestRsyncArgv:
         transport = argv[argv.index("-e") + 1]
         assert transport.startswith("C:/msys64/usr/bin/ssh.exe")
 
-    def test_pull_is_relative_with_anchor(self):
+    def test_pull_into_parent_dir(self):
+        # No --relative (modern macOS rsync/openrsync rejects the /./ source);
+        # the root is pulled beside its parent dir.
         argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build/macos", [])
-        assert "--relative" in argv
-        assert argv[-2] == "u@h:cbuild/demo/./build/macos"
-        assert argv[-1] == "."
+        assert "--relative" not in argv
+        assert argv[-2] == "u@h:cbuild/demo/build/macos"
+        assert argv[-1] == "build/"
+
+    def test_pull_top_level_root_into_cwd(self):
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "dist", [])
+        assert argv[-2] == "u@h:cbuild/demo/dist"
+        assert argv[-1] == "./"
+
+    def test_root_parent(self):
+        assert container._root_parent("build/macos/Release/x.app") == "build/macos/Release"
+        assert container._root_parent("dist") == ""
 
 
 class TestSiblingSsh:
@@ -683,7 +694,7 @@ class TestCmdContainerBuild:
         config = _three_host_config(tmp_path)
 
         def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
-            if argv[0] == "rsync" and "--relative" in argv:
+            if argv[0] == "rsync" and argv[-1].endswith("/") and ":" in argv[-2]:
                 raise sp.CalledProcessError(23, "rsync")
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)
@@ -698,7 +709,7 @@ class TestCmdContainerBuild:
         config = _three_host_config(tmp_path)
 
         def fake_run_argv(argv, cwd, env, dry_run=False, *, prefix="", redact=None):
-            if argv[0] == "rsync" and "--relative" in argv:
+            if argv[0] == "rsync" and argv[-1].endswith("/") and ":" in argv[-2]:
                 raise sp.CalledProcessError(12, "rsync")
 
         monkeypatch.setattr(container, "run_argv", fake_run_argv)

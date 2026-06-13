@@ -50,9 +50,11 @@ REM must be on the MACHINE PATH for non-interactive sshd sessions; Chocolatey's
 REM shim dir (C:\ProgramData\chocolatey\bin) satisfies that.
 REM pwsh: product windows lanes invoke PowerShell 7 scripts; cmake/ninja ride
 REM the PATH for the toolkit's tool checks (Flutter itself locates VS's own).
+REM mingw provides windres, used by bash-based sidecar builds (deckhand) to
+REM embed Go .syso resources into the Windows exe.
 REM Flutter is NOT installed via choco (that pulls LATEST and drifts ahead of
 REM the rest of the pool) -- it is git-cloned at the pinned tag below.
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja --installargs "ADD_CMAKE_TO_PATH=System"
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja mingw --installargs "ADD_CMAKE_TO_PATH=System"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%

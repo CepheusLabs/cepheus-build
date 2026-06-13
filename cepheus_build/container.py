@@ -636,6 +636,11 @@ def rsync_push_argv(
     return argv
 
 
+def _root_parent(root: str) -> str:
+    """The repo-relative parent dir of an artifact ``root`` ("" at top level)."""
+    return root.rsplit("/", 1)[0] if "/" in root else ""
+
+
 def rsync_pull_argv(
     destination: str,
     remote_path: str,
@@ -643,21 +648,24 @@ def rsync_pull_argv(
     port_opts: list[str],
     endpoint: dict[str, Any] | None = None,
 ) -> list[str]:
-    """rsync argv pulling ONE artifact ``root`` back into ``cwd`` (= repo_root).
+    """rsync argv pulling ONE artifact ``root`` into its place under ``cwd``.
 
-    ``--relative`` with the ``/./`` anchor recreates the root's path under the
-    local repo, creating implied directories as needed. One invocation per
-    root: multi-source forms (``user@host:p1 :p2``) need an rsync >= 3.0
-    client, which a macOS dispatch host's stock rsync 2.6.9 is not.
+    Deliberately NOT ``--relative``: modern rsync / the openrsync that recent
+    macOS ships reject the server-supplied path prefix on a ``/./`` source
+    ("rejecting unrequested file-list name"). Instead the root is pulled
+    *beside its parent* -- ``rsync host:<path>/<root> <parent>/`` copies the
+    root into the (caller-created) local parent dir -- which every rsync
+    flavor accepts. ``cwd`` is ``repo_root``, so the destination is relative.
     """
+    parent = _root_parent(root)
+    destination_dir = f"{parent}/" if parent else "./"
     return [
         "rsync",
         "-az",
-        "--relative",
         "-e",
         _rsync_transport(endpoint or {}, port_opts),
-        f"{destination}:{remote_path}/./{root}",
-        ".",
+        f"{destination}:{remote_path}/{root}",
+        destination_dir,
     ]
 
 
@@ -747,9 +755,9 @@ def run_ssh_target(
     )
 
     # 3. Pull the declared artifact paths back so `artifacts` finds them on
-    #    the host -- one rsync per root (stock macOS rsync cannot parse
-    #    multi-source remote args). A missing root (rsync exit 23) downgrades
-    #    to a warning: the build itself succeeded, and the host-side
+    #    the host -- one rsync per root (each pulled beside its locally-created
+    #    parent dir; see rsync_pull_argv). A missing root (rsync exit 23)
+    #    downgrades to a warning: the build itself succeeded, and the host-side
     #    `artifacts` step is the authoritative check on which outputs exist.
     if not roots:
         locked_print(
@@ -758,6 +766,9 @@ def run_ssh_target(
         )
         return
     for root in roots:
+        parent = _root_parent(root)
+        if parent and not dry_run:
+            (config.repo_root / parent).mkdir(parents=True, exist_ok=True)
         pull = rsync_pull_argv(destination, remote_path, root, port_opts, endpoint)
         try:
             run_argv(pull, config.repo_root, env, dry_run, prefix=prefix)
