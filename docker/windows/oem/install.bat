@@ -50,11 +50,25 @@ REM must be on the MACHINE PATH for non-interactive sshd sessions; Chocolatey's
 REM shim dir (C:\ProgramData\chocolatey\bin) satisfies that.
 REM pwsh: product windows lanes invoke PowerShell 7 scripts; cmake/ninja ride
 REM the PATH for the toolkit's tool checks (Flutter itself locates VS's own).
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync flutter pwsh cmake ninja --installargs "ADD_CMAKE_TO_PATH=System"
+REM Flutter is NOT installed via choco (that pulls LATEST and drifts ahead of
+REM the rest of the pool) -- it is git-cloned at the pinned tag below.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja --installargs "ADD_CMAKE_TO_PATH=System"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
 )
+
+REM --- Flutter (PINNED) + bash on the machine PATH ---------------------------
+REM Pin Flutter to the SAME tag as docker/linux/Dockerfile so every OS in the
+REM pool builds identically (a newer Flutter breaks shared code like forge).
+REM Also put Git's bash on the machine PATH: bash-based product build scripts
+REM (e.g. deckhand's scripts/build.sh windows) run over the PowerShell ssh
+REM session and need `bash` resolvable.
+set "CBUILD_FLUTTER_VERSION=3.41.7"
+if not exist "C:\flutter\bin\flutter.bat" (
+    git clone --depth 1 --branch %CBUILD_FLUTTER_VERSION% https://github.com/flutter/flutter.git C:\flutter
+)
+powershell -NoProfile -Command "$m=[Environment]::GetEnvironmentVariable('Path','Machine'); foreach($p in 'C:\flutter\bin','C:\Program Files\Git\bin'){ if($m -notlike '*'+$p+'*'){ $m=$m+';'+$p } }; [Environment]::SetEnvironmentVariable('Path',$m,'Machine')"
 
 REM Flutter Windows desktop needs Visual Studio's "Desktop development with
 REM C++". The workload rides the SAME bootstrapper invocation via

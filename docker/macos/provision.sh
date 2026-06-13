@@ -32,8 +32,24 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
 
-# --- Toolchains -----------------------------------------------------------
-brew install --cask flutter
+# --- Flutter (PINNED to match the whole pool) -----------------------------
+# Must equal docker/linux/Dockerfile's FLUTTER_VERSION: a brew --cask flutter
+# installs LATEST, which drifts ahead of the Linux builder and breaks shared
+# code (e.g. forge using APIs a newer Flutter removed). Git-clone the exact
+# tag, the same mechanism the Linux image uses, so every OS builds identically.
+FLUTTER_VERSION="${CBUILD_FLUTTER_VERSION:-3.41.7}"
+brew uninstall --cask flutter 2>/dev/null || true   # drop any unpinned/latest flutter
+_have=""
+[ -x "$HOME/flutter/bin/flutter" ] && _have="$("$HOME/flutter/bin/flutter" --version 2>/dev/null | sed -n 's/^Flutter \([0-9.][0-9.]*\).*/\1/p')"
+if [ "$_have" != "$FLUTTER_VERSION" ]; then
+  rm -rf "$HOME/flutter"
+  git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+fi
+grep -q 'flutter/bin' "$HOME/.zshenv" 2>/dev/null \
+  || echo 'export PATH="$HOME/flutter/bin:$PATH"' >> "$HOME/.zshenv"
+export PATH="$HOME/flutter/bin:$PATH"
+
+# --- Other toolchains -----------------------------------------------------
 # python@3.12: the Xcode CLT python3 is 3.9, too old for the toolkit
 # (tomllib needs >= 3.11). Homebrew does not link an unversioned python3,
 # and non-interactive ssh shells skip path_helper, so both get fixed here.
