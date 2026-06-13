@@ -620,19 +620,26 @@ def _rsync_transport(endpoint: dict[str, Any], port_opts: list[str]) -> str:
 
 
 def _rsync_base(endpoint: dict[str, Any] | None) -> list[str]:
-    """``rsync -az`` plus ``--blocking-io`` when the remote is a Windows VM.
+    """``rsync -az --partial`` plus ``--blocking-io`` for a Windows VM remote.
 
     cwRsync as the receiver over Windows OpenSSH intermittently fails with
     ``safe_write failed ... Resource temporarily unavailable`` (EAGAIN on its
     non-blocking socket); ``--blocking-io`` is the documented workaround. Keyed
     on ``shell = "powershell"`` (the Windows endpoints) so Linux/macOS pulls
     keep the faster default; an endpoint may force it with ``rsync_blocking_io``.
+
+    ``--partial`` keeps a partially transferred file on a dropped/retried
+    connection so the retry resumes instead of restarting the whole file (large
+    Flutter/Rust trees over a flaky VM link). ``--partial-dir`` stashes the
+    partials in a sidecar dir so they stay OUT of the ``--delete`` push tree
+    (a bare ``--partial`` would leave half-files where ``--delete`` could prune
+    them or the build could pick them up).
     """
     endpoint = endpoint or {}
     blocking = endpoint.get("rsync_blocking_io")
     if blocking is None:
         blocking = str(endpoint.get("shell") or "").lower() == "powershell"
-    base = ["rsync", "-az"]
+    base = ["rsync", "-az", "--partial", "--partial-dir=.rsync-partial"]
     if blocking:
         base.append("--blocking-io")
     return base

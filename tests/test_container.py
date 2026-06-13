@@ -452,6 +452,18 @@ class TestRsyncArgv:
         assert argv[-2] == "u@h:cbuild/demo/dist"
         assert argv[-1] == "./"
 
+    def test_push_resumes_partial_in_sidecar_dir(self):
+        # --partial resumes a dropped/retried transfer; --partial-dir keeps the
+        # half-files OUT of the --delete push tree.
+        argv = container.rsync_push_argv("u@h:cbuild/demo", [])
+        assert "--partial" in argv
+        assert "--partial-dir=.rsync-partial" in argv
+
+    def test_pull_resumes_partial_in_sidecar_dir(self):
+        argv = container.rsync_pull_argv("u@h", "cbuild/demo", "build", [])
+        assert "--partial" in argv
+        assert "--partial-dir=.rsync-partial" in argv
+
     def test_root_parent(self):
         assert container._root_parent("build/macos/Release/x.app") == "build/macos/Release"
         assert container._root_parent("dist") == ""
