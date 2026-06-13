@@ -19,6 +19,6 @@ jobs:
   release:
     uses: CepheusLabs/cepheus-build/.github/workflows/app-release.yml@main
     with:
-      product: deckhand
+      product: <product>   # set to your product slug
       targets: all
     secrets: inherit   # org/repo signing + store secrets; unset ones degrade gracefully

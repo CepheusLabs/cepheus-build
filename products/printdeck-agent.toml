@@ -1,6 +1,7 @@
 # Printdeck Agent — the split LAN print agent (Go, single module at the repo
-# root). Registered for the quality surface (doctor/build/vet/test); release
-# packaging and installers ship from the product repo's own CI (agent-ci.yml).
+# root). Registered for the quality surface (doctor/build/vet/test); the BUILD
+# caller is the product repo's own CI (agent-ci.yml), while release packaging
+# and installers ship from release.yml -> app-release.yml.
 # The agent has no first-party Go requires today, so there is no deps/gopins
 # surface yet — add a GoWorkspace entry in dependency_model.py when it grows
 # one (e.g. printdeck-contracts generated code).

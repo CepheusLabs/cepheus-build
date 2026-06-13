@@ -5,7 +5,11 @@ How the Cepheus Labs Flutter apps (**Anvil**, **Colorwake Studio**, **Deckhand**
 *demand* side that consumes the signed installers [`cepheus-build` already
 publishes](installers.md).
 
-> Status: **design / proposed**. Nothing here is built yet.
+> Status: **partially built**. The supply-side scripts
+> (`publish-update-feed.sh`, `sign-update-eddsa.sh`, `verify-update-eddsa.sh`,
+> `cl-update-keygen.sh`) exist, and the `pd-updates` control plane is built and
+> deployed on errai. The still-pending piece is the in-app `cl_updater` client
+> (§7) that checks → downloads → verifies → applies.
 > Companion docs: [installers.md](installers.md) (what we build & sign),
 > [stores.md](stores.md) (store lanes). This doc adds the client-side updater
 > plus the feed that bridges the two.

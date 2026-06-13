@@ -11,7 +11,9 @@ glue for Flutter apps with product-specific native pieces.
 The first supported product configs are:
 
 - `colorwake-studio` - Flutter app plus Rust native library.
-- `printdeck` - Flutter app plus existing desktop/mobile store packaging.
+- `printdeck-app` - Flutter client.
+- `printdeck-server` - Go backend.
+- `printdeck-agent` - LAN agent.
 - `anvil` - Flutter app plus Rust slicer/FFI workspace.
 - `deckhand` - Flutter desktop app plus Go sidecar/helper packaging.
 - `foundry` - Rust host tools, embedded MCU firmware, and Buildroot-based
@@ -24,13 +26,13 @@ From a checkout beside the app repos:
 ```bash
 ./bin/cepheus-build --version
 ./bin/cepheus-build list
-./bin/cepheus-build deps -p printdeck --write
-./bin/cepheus-build plan -p printdeck all
+./bin/cepheus-build deps -p printdeck-app --write
+./bin/cepheus-build plan -p printdeck-app all
 ./bin/cepheus-build doctor -p anvil desktop
 ./bin/cepheus-build build -p colorwake-studio macos --install-missing-deps
 ./bin/cepheus-build artifacts -p deckhand desktop_packages --copy-to dist/deckhand
 ./bin/cepheus-build plan -p foundry os
-./bin/cepheus-build local-sweep printdeck deckhand --targets desktop --dry-run
+./bin/cepheus-build local-sweep printdeck-app deckhand --targets desktop --dry-run
 ```
 
 ## GUI
@@ -112,7 +114,7 @@ Cepheus Build supports the same product configs in three places:
 You can inspect the generated CI matrix without running a build:
 
 ```bash
-./bin/cepheus-build ci-matrix -p printdeck --runner-profile github-hosted all --pretty
+./bin/cepheus-build ci-matrix -p printdeck-app --runner-profile github-hosted all --pretty
 ./bin/cepheus-build ci-matrix -p deckhand --runner-profile self-hosted desktop_packages --pretty
 ```
 
@@ -140,11 +142,11 @@ in the same sweep run. To force a shared stamp across products, set the
 override variables explicitly:
 
 ```bash
-CBUILD_VERSION=26.5.28 CBUILD_BUILD_NUMBER=1234 ./bin/cepheus-build build -p printdeck web
+CBUILD_VERSION=26.5.28 CBUILD_BUILD_NUMBER=1234 ./bin/cepheus-build build -p printdeck-app web
 ```
 
 Product-prefixed variables also work, for example
-`PRINTDECK_BUILD_NAME` and `PRINTDECK_BUILD_NUMBER`.
+`PRINTDECK_APP_BUILD_NAME` and `PRINTDECK_APP_BUILD_NUMBER`.
 
 ## Store Deploys
 
@@ -153,7 +155,7 @@ CLI validates required environment variables, host OS, and then runs the
 configured commands:
 
 ```bash
-./bin/cepheus-build deploy -p printdeck google_play
+./bin/cepheus-build deploy -p printdeck-app google_play
 ./bin/cepheus-build deploy -p colorwake-studio testflight_ios
 ./bin/cepheus-build deploy -p deckhand msstore --dry-run
 ```
@@ -176,7 +178,7 @@ Use `describe` to get machine-readable JSON about products and runner profiles:
 ./bin/cepheus-build describe --json
 
 # Full description of one product (slug, targets, stores, groups, github config)
-./bin/cepheus-build describe -p printdeck --json
+./bin/cepheus-build describe -p printdeck-app --json
 ```
 
 The `describe -p <product> --json` output includes target host restrictions,
@@ -209,10 +211,10 @@ targets (`git pull --ff-only`). Two flags control this:
 
 ```bash
 # Skip the pre-build sync (use the checkout as-is)
-./bin/cepheus-build build -p printdeck macos --no-sync
+./bin/cepheus-build build -p printdeck-app macos --no-sync
 
 # Abort if the product working tree has uncommitted changes
-./bin/cepheus-build build -p printdeck macos --require-clean
+./bin/cepheus-build build -p printdeck-app macos --require-clean
 ```
 
 `--dry-run` never mutates the product checkout regardless of `--no-sync`.

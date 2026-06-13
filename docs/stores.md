@@ -63,10 +63,19 @@ and commits the submission for review.
 
 ## GitHub Releases
 
-Products with downloadable installers can use `gh release upload` from a store
-lane or from their own release workflow. Deckhand is the first product config
-that models this because it ships desktop installers rather than mobile-store
-builds.
+Products with downloadable installers attach them to a GitHub Release through
+the canonical `github_release` store lane, which runs
+`scripts/upload-release.sh` against the `v<version>-<build>` tag:
+
+```bash
+./bin/cepheus-build deploy -p <product> github_release
+```
+
+Do not hand-roll `gh release upload`. In CI the shared `app-release.yml`
+`publish` job attaches the built installers to the tagged release (and then runs
+the enabled store lanes), so a tag push performs the upload automatically. See
+[`installers.md`](installers.md) for the lane definition and the release
+pipeline.
 
 ## Desktop installers + package repositories
 
