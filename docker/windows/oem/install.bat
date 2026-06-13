@@ -54,7 +54,8 @@ REM mingw provides windres, used by bash-based sidecar builds (deckhand) to
 REM embed Go .syso resources into the Windows exe.
 REM Flutter is NOT installed via choco (that pulls LATEST and drifts ahead of
 REM the rest of the pool) -- it is git-cloned at the pinned tag below.
-call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja mingw --installargs "ADD_CMAKE_TO_PATH=System"
+REM golang: products with a Go sidecar/helper (deckhand) build it on Windows.
+call "%ProgramData%\chocolatey\bin\choco.exe" install -y --no-progress git python3 rsync pwsh cmake ninja mingw golang --installargs "ADD_CMAKE_TO_PATH=System"
 if %ERRORLEVEL% NEQ 0 if %ERRORLEVEL% NEQ 3010 (
     echo [cepheus] ERROR: choco install failed with exit code %ERRORLEVEL%
     exit /b %ERRORLEVEL%
